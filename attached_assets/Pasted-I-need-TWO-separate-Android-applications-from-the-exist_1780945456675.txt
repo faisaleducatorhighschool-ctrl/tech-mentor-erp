@@ -1,0 +1,99 @@
+I need TWO separate Android applications from the existing ERP system.
+
+PROJECT BRAND:
+Faisal Book Depot Khanpur
+
+DOMAIN:
+[www.faisalbookdepot.com](http://www.faisalbookdepot.com)
+
+APP 1: Customer App
+Package ID:
+com.faisalbookdepot.khanpur
+
+Purpose:
+Public customer application.
+
+Features:
+
+* Browse products without login
+* Search books
+* Categories and publishers
+* Product details
+* Cart
+* Checkout
+* Guest checkout
+* Customer registration/login
+* Order history
+* Wishlist
+* Profile
+* Store branding from database settings
+
+Branding:
+
+* App Name: Faisal Book Depot Khanpur
+* Use provided logo for icon, splash screen and app branding
+* All store name, phone, address and logo should come from Settings table
+
+APP 2: Staff/Admin App
+Package ID:
+com.faisalbookdepot.staff
+
+Purpose:
+ERP staff application.
+
+Features:
+
+* Staff login only
+* Dashboard
+* Orders
+* Products
+* Customers
+* Reports
+* Inventory
+* Role-based access
+* Admin and employee support
+
+Branding:
+
+* App Name: Faisal Book Depot Staff
+* Use same logo family
+* Staff Portal branding
+
+REQUIREMENTS
+
+1. Keep both apps in one shared codebase if possible.
+2. Create complete Expo/EAS configuration.
+3. Create app icons.
+4. Create adaptive icons.
+5. Create splash screens.
+6. Create eas.json.
+7. Create build profiles for:
+
+   * development
+   * preview
+   * production
+8. Generate all Play Store assets:
+
+   * App title
+   * Short description
+   * Full description
+   * Privacy Policy template
+   * Feature graphic (1024x500)
+   * Screenshots checklist
+9. Prepare APK build commands.
+10. Prepare AAB build commands.
+11. Verify Android package IDs.
+12. Verify signing configuration.
+13. Create deployment guide.
+
+Final Deliverables:
+
+* Complete source code
+* Expo configuration
+* APK build instructions
+* AAB build instructions
+* Play Store publishing package
+* Customer App package: com.faisalbookdepot.khanpur
+* Staff App package: com.faisalbookdepot.staff
+
+After coding is complete, provide exact commands to generate APK and AAB files.

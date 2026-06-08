@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "cHrNkIoKuiWebFXzJUu5q"
+uri = "file://attached_assets/icon-customer.png"
+type = "image"
+title = "faisal book depot customer icon"
+
+[[generated]]
+id = "RaZZ0j-NMQ1hl8upWdS7G"
+uri = "file://attached_assets/icon-staff.png"
+type = "image"
+title = "faisal book depot staff icon"
+
+[[generated]]
+id = "LoJi3YlKBjVBjNQUlFlP_"
+uri = "file://attached_assets/splash-customer.png"
+type = "image"
+title = "faisal book depot splash"
+
+[[generated]]
+id = "KSmhuhLk1gt8vtp731Zsj"
+uri = "file://attached_assets/feature-graphic.png"
+type = "image"
+title = "play store feature graphic"

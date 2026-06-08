@@ -19,7 +19,8 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec in `lib/api-spec/openapi.yaml`)
 - Build: esbuild (CJS bundle)
-- Customer app: React + Vite (`/customer-app/`)
+- Customer web app: React + Vite (`/customer-app/`)
+- Customer Android app: Expo (`/artifacts/customer-mobile/`) — EAS builds only, not a Replit workflow
 - Staff app: Expo React Native (`/employee-app/`)
 
 ## Where things live
@@ -29,8 +30,11 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 - `lib/api-zod/src/generated/` — generated Zod schemas (do not edit)
 - `lib/api-client-react/src/generated/` — generated React Query hooks (do not edit)
 - `artifacts/api-server/src/routes/` — all 28 Express route handlers
-- `artifacts/customer-app/src/` — React/Vite customer storefront
+- `artifacts/customer-app/src/` — React/Vite customer web storefront
+- `artifacts/customer-mobile/app/` — Expo customer Android app (EAS builds)
 - `artifacts/employee-app/app/` — Expo staff ERP app
+- `docs/deployment-guide.md` — full EAS build + Play Store guide
+- `docs/play-store-assets.md` — store listing copy, descriptions, privacy policy
 
 ## Architecture decisions
 
@@ -42,17 +46,23 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 
 ## Product
 
-**Customer App** (`/customer-app/`) — Public storefront for Faisal Book Depot Khanpur.
+**Customer Web App** (`/customer-app/`) — Public web storefront, live in browser.
   - Browse products, categories, brands
   - Cart, checkout (guest + registered)
   - Customer login/register, order history, wishlist, profile
-  - App name: "Faisal Book Depot Khanpur" | Package: com.faisalbookdepot.khanpur
 
-**Staff App** (`/employee-app/`) — Internal ERP for staff/admin.
+**Customer Android App** (`artifacts/customer-mobile/`) — Expo app, built with EAS CLI.
+  - All same features as web app, native Android UX
+  - Home, Shop, Cart, Profile tabs; product detail, checkout, orders, wishlist
+  - Guest checkout, customer login/register, cart persisted in AsyncStorage
+  - Payment: COD, JazzCash, EasyPaisa, Bank Transfer
+  - App name: "Faisal Book Depot Khanpur" | Package: `com.faisalbookdepot.khanpur`
+
+**Staff App** (`/employee-app/`) — Internal Expo ERP for staff/admin.
   - Dashboard, POS, Sales, Purchases, Inventory, Products
   - Customers, Suppliers, Ledger, Reports, Expenses
   - Role-based access, requires staff login
-  - App name: "Faisal Book Depot Staff" | Package: com.faisalbookdepot.staff
+  - App name: "Faisal Book Depot Staff" | Package: `com.faisalbookdepot.staff`
 
 ## Default credentials
 
@@ -70,6 +80,9 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 - PostgreSQL not MySQL: no `CAST(x AS UNSIGNED)` — use `x::bigint`. No `CURDATE()` — use `CURRENT_DATE`. No backtick identifiers.
 - `pnpm run dev` at root does not exist by design. Start individual services via workflows.
 - Employee-app uses Expo Go; run via `restart_workflow "artifacts/employee-app: expo"`.
+- Customer-mobile is NOT a Replit workflow artifact (only one mobile slot available); build via `cd artifacts/customer-mobile && eas build --platform android --profile preview`.
+- Before building customer-mobile, set `EXPO_PUBLIC_DOMAIN` in `artifacts/customer-mobile/eas.json` to your live domain.
+- Orval-generated hooks wrap `UseQueryOptions` — pass `{ query: { enabled } as any }` for conditional queries.
 
 ## Pointers
 
