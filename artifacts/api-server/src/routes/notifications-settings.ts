@@ -291,7 +291,7 @@ router.put("/whatsapp/config", requireAuth, requireAdmin, async (req, res): Prom
   await db
     .insert(whatsappConfigTable)
     .values({ id: 1, customBodyTemplate: '{"to":"{{to}}","message":"{{message}}"}', ...upd })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    .onConflictDoNothing();
   if (Object.keys(upd).length) {
     await db.update(whatsappConfigTable).set(upd).where(eq(whatsappConfigTable.id, 1));
   }

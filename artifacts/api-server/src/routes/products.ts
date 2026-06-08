@@ -233,7 +233,7 @@ router.post("/products/import", requireAuth, upload.single("file"), async (req, 
 
     try {
       await db.insert(productsTable).values(values)
-        .onDuplicateKeyUpdate({ set: {
+        .onConflictDoUpdate({ target: productsTable.sku, set: {
           name: values.name,
           costPrice: values.costPrice,
           salePrice: values.salePrice,
