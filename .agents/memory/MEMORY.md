@@ -1,0 +1,3 @@
+- [MySQL→PostgreSQL SQL patterns](mysql-to-pg-sql.md) — CAST AS UNSIGNED → ::bigint; CURDATE() → CURRENT_DATE; REGEXP → ~; substring(x,5) works in both
+- [Admin user seed](admin-user-seed.md) — default admin: username=admin, password=admin123; bcrypt hash generated via node from api-server node_modules bcryptjs
+- [API import paths](api-import-paths.md) — routes/index.ts imports with .js extension (e.g. "./storage.js"); app.ts imports routes as "./routes/index.js"

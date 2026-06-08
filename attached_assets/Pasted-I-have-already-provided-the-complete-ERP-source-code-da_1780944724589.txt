@@ -1,0 +1,152 @@
+I have already provided the complete ERP source code, database files, GitHub project, branding requirements, and deployment files.
+
+Now create a professional two-app architecture from the existing codebase.
+
+PROJECT GOAL
+
+Build two separate Android applications from the same backend and shared codebase.
+
+=================================================
+APP 1 – CUSTOMER APPLICATION
+============================
+
+App Name:
+Faisal Book Depot Khanpur
+
+Package ID:
+com.faisalbookdepot.khanpur
+
+Purpose:
+Public customer-facing application.
+
+Features:
+
+* Home Screen
+* Featured Products
+* Categories
+* Product Search
+* Product Details
+* Cart
+* Checkout
+* Guest Checkout
+* Customer Registration
+* Customer Login
+* Customer Profile
+* Order History
+* Order Tracking
+* Notifications
+* Contact Information
+* WhatsApp Contact
+
+Rules:
+
+* Customers must NOT see ERP, POS, Inventory, Reports, Supplier, Ledger, or Admin screens.
+* App should work even if customer is not logged in.
+* Login should only be required for profile and order history.
+
+=================================================
+APP 2 – STAFF / ADMIN APPLICATION
+=================================
+
+App Name:
+Faisal Book Depot Staff
+
+Package ID:
+com.faisalbookdepot.staff
+
+Purpose:
+Internal ERP and management application.
+
+Features:
+
+* Dashboard
+* POS
+* Sales
+* Purchases
+* Inventory
+* Products
+* Categories
+* Customers
+* Suppliers
+* Customer Ledger
+* Supplier Ledger
+* Cash Collections
+* Expenses
+* Reports
+* Notifications
+* Settings
+* User Management
+* Employee Management
+
+Rules:
+
+* Public customers must never access this application.
+* Staff login required before entering the system.
+* Role-based permissions must be enforced.
+
+=================================================
+SHARED REQUIREMENTS
+===================
+
+Both apps must:
+
+* Use the same backend API.
+* Use the same MySQL database.
+* Use the same authentication system.
+* Use the same branding settings.
+* Use the same GitHub repository.
+* Be maintained from a shared codebase.
+
+=================================================
+WHITE LABEL SYSTEM
+==================
+
+Prepare the project as a white-label solution.
+
+Future client deployment should require changing only:
+
+* App Name
+* Logo
+* Package ID
+* Domain
+* Store Name
+* Company Information
+
+No code changes should be required for new clients.
+
+=================================================
+PLAY STORE REQUIREMENTS
+=======================
+
+Prepare everything required for publishing.
+
+Provide:
+
+1. APK (testing)
+2. AAB (Play Store)
+3. Play Store descriptions
+4. Privacy Policy template
+5. App icon assets
+6. Splash screen assets
+7. Screenshot requirements
+8. Signing configuration
+9. EAS configuration
+
+=================================================
+DELIVERABLES
+============
+
+At completion provide:
+
+* Customer APK
+* Customer AAB
+* Staff APK
+* Staff AAB
+* White-label deployment guide
+* Play Store publishing guide
+* Future client onboarding guide
+
+Before building APK/AAB, verify that all TypeScript errors, build errors, routing issues, and API integration issues are resolved.
+
+Do not stop after code changes.
+Complete the applications and provide the final build-ready deliverables.
