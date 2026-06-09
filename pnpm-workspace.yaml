@@ -76,13 +76,18 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 # pnpm v11 renamed the above to `allowBuilds`. Hostinger installs the latest
-# pnpm (v11), which ignores `onlyBuiltDependencies` and would otherwise fail
-# install with ERR_PNPM_IGNORED_BUILDS. Keep both for cross-version support.
+# pnpm (v11), which ignores `onlyBuiltDependencies`. These are set to `false`
+# so pnpm v11 SKIPS their install-time build scripts instead of either failing
+# with ERR_PNPM_IGNORED_BUILDS or crashing with EACCES (Hostinger strips execute
+# permission from extracted binaries during install). The esbuild binary is made
+# executable at build time instead (see the root "build" script's chmod step).
+# This block only affects pnpm v11 (Hostinger); local pnpm v10 uses the
+# onlyBuiltDependencies list above and is unaffected.
 allowBuilds:
-  '@swc/core': true
-  esbuild: true
-  msw: true
-  unrs-resolver: true
+  '@swc/core': false
+  esbuild: false
+  msw: false
+  unrs-resolver: false
 
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
