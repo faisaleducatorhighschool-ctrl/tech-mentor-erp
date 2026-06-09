@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "cHrNkIoKuiWebFXzJUu5q"
@@ -24,3 +23,9 @@ id = "KSmhuhLk1gt8vtp731Zsj"
 uri = "file://attached_assets/feature-graphic.png"
 type = "image"
 title = "play store feature graphic"
+
+[[outputs]]
+id = "gTgt6DS5T2EZrJf8DfQzu"
+uri = "file://docs/hostinger-api-deployment.md"
+type = "text"
+title = "Hostinger API Deployment Guide (MySQL)"
