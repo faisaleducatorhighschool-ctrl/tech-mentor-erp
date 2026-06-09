@@ -121,7 +121,7 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
     paidAmount: String(paidAmount ?? 0),
     dueAmount: String(due),
     notes: notes ?? null,
-  }).returning({ id: ordersTable.id });
+  }).$returningId();
 
   await db.insert(orderItemsTable).values(items.map(i => ({
     orderId: newOrderId,

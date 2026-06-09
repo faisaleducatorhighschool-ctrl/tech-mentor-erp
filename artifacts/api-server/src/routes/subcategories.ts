@@ -29,7 +29,7 @@ router.get("/subcategories", requireAuth, async (req, res): Promise<void> => {
 router.post("/subcategories", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateSubcategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [{ id: _insId }] = await db.insert(subcategoriesTable).values(parsed.data).returning({ id: subcategoriesTable.id });
+  const [{ id: _insId }] = await db.insert(subcategoriesTable).values(parsed.data).$returningId();
   const [sub] = await db.select().from(subcategoriesTable).where(eq(subcategoriesTable.id, _insId));
   res.status(201).json({ ...sub, categoryName: null, productCount: 0, createdAt: sub.createdAt.toISOString() });
 });

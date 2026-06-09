@@ -233,7 +233,7 @@ router.post("/products/import", requireAuth, upload.single("file"), async (req, 
 
     try {
       await db.insert(productsTable).values(values)
-        .onConflictDoUpdate({ target: productsTable.sku, set: {
+        .onDuplicateKeyUpdate({ set: {
           name: values.name,
           costPrice: values.costPrice,
           salePrice: values.salePrice,
@@ -323,7 +323,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
     batchNumber: d.batchNumber ?? null,
     mfgDate: d.mfgDate ?? null,
     expiryDate: d.expiryDate ?? null,
-  }).returning({ id: productsTable.id });
+  }).$returningId();
   const [product] = await db.select(productSelect).from(productsTable).where(eq(productsTable.id, newId));
   res.status(201).json({ ...mapProduct(product), categoryName: null, subCategoryName: null, branchName: null, brandName: null, seriesName: null, className: null, subjectName: null });
 });

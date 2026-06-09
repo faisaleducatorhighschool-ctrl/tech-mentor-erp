@@ -8,7 +8,7 @@ const router = Router();
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 class ReturnValidationError extends Error {}
@@ -76,14 +76,14 @@ router.get("/purchases/returns", requireAuth, async (_req, res): Promise<void> =
   const rows = await xr(sql`
     SELECT
       pr.id, pr.return_number, pr.purchase_id, pr.supplier_id,
-      pr.total_amount::numeric as total_amount, pr.notes, pr.return_reason, pr.created_at,
+      pr.total_amount as total_amount, pr.notes, pr.return_reason, pr.created_at,
       (select name from suppliers where id = pr.supplier_id) as supplier_name,
       (select purchase_number from purchases where id = pr.purchase_id) as purchase_number,
       (
         SELECT json_arrayagg(json_object(
           'productName', (select name from products where id = pri.product_id),
           'productId', pri.product_id, 'quantity', pri.quantity,
-          'costPrice', pri.cost_price::numeric
+          'costPrice', pri.cost_price
         ))
         FROM purchase_return_items pri WHERE pri.return_id = pr.id
       ) as items
@@ -129,7 +129,7 @@ router.post("/purchases/returns", requireAuth, async (req, res): Promise<void> =
     const ret = await db.transaction(async (tx) => {
       const xrt = async (q: ReturnType<typeof sql>): Promise<any[]> => {
         const r = (await tx.execute(q)) as any;
-        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
       };
 
       for (const [productId, wantQty] of productOrder) {
@@ -178,7 +178,7 @@ router.post("/purchases/returns", requireAuth, async (req, res): Promise<void> =
         totalAmount: String(total),
         notes: notes ?? null,
         returnReason: returnReason ?? null,
-      }).returning({ id: purchaseReturnsTable.id });
+      }).$returningId();
       const [created] = await tx.select().from(purchaseReturnsTable).where(eq(purchaseReturnsTable.id, createdId));
 
       await tx.insert(purchaseReturnItemsTable).values(lineItems.map((i) => ({
@@ -212,7 +212,7 @@ router.post("/purchases/returns", requireAuth, async (req, res): Promise<void> =
         // can't both read the same prior balance and clobber the running chain.
         await xrt(sql`SELECT id FROM suppliers WHERE id = ${effectiveSupplierId} FOR UPDATE`);
         const [last] = await xrt(sql`
-          SELECT balance::numeric as balance FROM ledger_entries
+          SELECT balance as balance FROM ledger_entries
           WHERE entity_type = 'supplier' AND entity_id = ${effectiveSupplierId}
           ORDER BY created_at DESC, id DESC LIMIT 1
         `);
@@ -309,7 +309,7 @@ router.post("/purchases", requireAuth, async (req, res): Promise<void> => {
         purchaseNumber, supplierId, notes: notes ?? null,
         totalAmount: String(total), paidAmount: String(paidAmount ?? 0), dueAmount: String(due),
         status: "received", createdById: req.user?.userId ?? null,
-      }).returning({ id: purchaseReturnItemsTable.id });
+      }).$returningId();
       await tx.insert(purchaseItemsTable).values(items.map(i => ({
         purchaseId: createdId, productId: i.productId, quantity: i.quantity, costPrice: String(i.costPrice),
       })));
@@ -321,13 +321,13 @@ router.post("/purchases", requireAuth, async (req, res): Promise<void> => {
       // due. Lock the supplier row so concurrent purchases can't both spend the
       // same advance.
       if (due > 0.009) {
-        const r = (await tx.execute(sql`SELECT advance_balance::numeric as adv, advance_paid_balance::numeric as paid FROM suppliers WHERE id = ${supplierId} FOR UPDATE`)) as any;
+        const r = (await tx.execute(sql`SELECT advance_balance as adv, advance_paid_balance as paid FROM suppliers WHERE id = ${supplierId} FOR UPDATE`)) as any;
         const row = Array.isArray(r) && Array.isArray(r[0]) ? r[0][0] : (Array.isArray(r) ? r[0] : r?.rows?.[0]);
         const advance = Number(row?.adv ?? 0);
         const apply = Math.min(advance, due);
         if (apply > 0.009) {
-          await tx.execute(sql`UPDATE purchases SET paid_amount = paid_amount::numeric + ${String(apply.toFixed(2))}, due_amount = due_amount::numeric - ${String(apply.toFixed(2))} WHERE id = ${createdId}`);
-          await tx.execute(sql`UPDATE suppliers SET advance_balance = advance_balance::numeric - ${String(apply.toFixed(2))}, advance_paid_balance = advance_paid_balance::numeric + ${String(apply.toFixed(2))} WHERE id = ${supplierId}`);
+          await tx.execute(sql`UPDATE purchases SET paid_amount = paid_amount + ${String(apply.toFixed(2))}, due_amount = due_amount - ${String(apply.toFixed(2))} WHERE id = ${createdId}`);
+          await tx.execute(sql`UPDATE suppliers SET advance_balance = advance_balance - ${String(apply.toFixed(2))}, advance_paid_balance = advance_paid_balance + ${String(apply.toFixed(2))} WHERE id = ${supplierId}`);
           const ins = (await tx.execute(sql`INSERT INTO supplier_transactions (supplier_id, account, txn_type, direction, amount, payment_method, reference_no, note, txn_date, created_by_id) VALUES (${supplierId}, 'advance', 'advance_applied', 'debit', ${String(apply.toFixed(2))}, 'advance', 'PENDING', ${`Applied to purchase ${purchaseNumber}`}, NOW(), ${req.user?.userId ?? null})`)) as any;
           const newId = Array.isArray(ins) ? (ins[0]?.insertId ?? (ins[0] as any)?.[0]?.insertId) : ins?.insertId;
           if (newId) await tx.execute(sql`UPDATE supplier_transactions SET reference_no = ${`SAP-${String(newId).padStart(6, "0")}`} WHERE id = ${newId}`);

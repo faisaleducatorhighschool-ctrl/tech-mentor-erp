@@ -1,24 +1,24 @@
-import { pgTable, text, integer, varchar, timestamp, serial } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const deliveryRoutesTable = pgTable("delivery_routes", {
-  id: serial("id").primaryKey(),
+export const deliveryRoutesTable = mysqlTable("delivery_routes", {
+  id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   area: varchar("area", { length: 255 }).notNull(),
   vehicle: varchar("vehicle", { length: 255 }),
-  employeeId: integer("employee_id"),
+  employeeId: int("employee_id"),
   deliveryDate: varchar("delivery_date", { length: 50 }),
   status: varchar("status", { length: 50 }).notNull().default("active"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const deliveryAssignmentsTable = pgTable("delivery_assignments", {
-  id: serial("id").primaryKey(),
-  orderId: integer("order_id").notNull(),
-  employeeId: integer("employee_id").notNull(),
-  routeId: integer("route_id"),
+export const deliveryAssignmentsTable = mysqlTable("delivery_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("order_id").notNull(),
+  employeeId: int("employee_id").notNull(),
+  routeId: int("route_id"),
   status: varchar("status", { length: 50 }).notNull().default("assigned"),
   deliveredAt: timestamp("delivered_at"),
   notes: text("notes"),

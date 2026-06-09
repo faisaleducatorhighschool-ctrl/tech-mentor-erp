@@ -9,7 +9,7 @@ const router = Router();
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 function dateRange(req: any) {
@@ -27,10 +27,10 @@ router.get("/ledger/customer/:id", requireAuth, async (req, res): Promise<void> 
 
   const [customer] = await xr(sql`
     SELECT id, name, phone, email, address,
-      balance::numeric as balance,
-      credit_limit::numeric as credit_limit,
-      advance_balance::numeric as advance_balance,
-      advance_paid_balance::numeric as advance_paid_balance
+      balance as balance,
+      credit_limit as credit_limit,
+      advance_balance as advance_balance,
+      advance_paid_balance as advance_paid_balance
     FROM customers WHERE id = ${id}
   `);
   if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
@@ -39,17 +39,17 @@ router.get("/ledger/customer/:id", requireAuth, async (req, res): Promise<void> 
   const [[salesOpening], [txnOpening]] = await Promise.all([
     xr(sql`
       SELECT
-        coalesce(sum(CASE WHEN is_return = false THEN due_amount::numeric ELSE 0 END), 0)
-          - coalesce(sum(CASE WHEN is_return = true THEN total_amount::numeric ELSE 0 END), 0)
+        coalesce(sum(CASE WHEN is_return = false THEN due_amount ELSE 0 END), 0)
+          - coalesce(sum(CASE WHEN is_return = true THEN total_amount ELSE 0 END), 0)
           as opening_balance
       FROM sales
-      WHERE customer_id = ${id} AND created_at::date < cast(${startDate} as date)
+      WHERE customer_id = ${id} AND cast(created_at as date) < cast(${startDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END), 0) as opening_txn
+      SELECT coalesce(sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END), 0) as opening_txn
       FROM customer_transactions
       WHERE customer_id = ${id} AND account = 'receivable'
-        AND txn_date::date < cast(${startDate} as date)
+        AND cast(txn_date as date) < cast(${startDate} as date)
     `),
   ]);
 
@@ -59,21 +59,21 @@ router.get("/ledger/customer/:id", requireAuth, async (req, res): Promise<void> 
       SELECT
         s.id, s.invoice_number as reference, s.created_at as date,
         CASE WHEN s.is_return THEN 'return' ELSE 'sale' END as type,
-        CASE WHEN s.is_return THEN 0 ELSE s.total_amount::numeric END as debit,
-        CASE WHEN s.is_return THEN s.total_amount::numeric ELSE s.paid_amount::numeric END as credit,
+        CASE WHEN s.is_return THEN 0 ELSE s.total_amount END as debit,
+        CASE WHEN s.is_return THEN s.total_amount ELSE s.paid_amount END as credit,
         NULL as method, NULL as note
       FROM sales s
       WHERE s.customer_id = ${id}
-        AND s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT t.id, t.reference_no as reference, t.txn_date as date, t.txn_type as type,
-        CASE WHEN t.direction = 'debit' THEN t.amount::numeric ELSE 0 END as debit,
-        CASE WHEN t.direction = 'credit' THEN t.amount::numeric ELSE 0 END as credit,
+        CASE WHEN t.direction = 'debit' THEN t.amount ELSE 0 END as debit,
+        CASE WHEN t.direction = 'credit' THEN t.amount ELSE 0 END as credit,
         t.payment_method as method, t.note as note
       FROM customer_transactions t
       WHERE t.customer_id = ${id} AND t.account = 'receivable'
-        AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
   ]);
 
@@ -86,17 +86,17 @@ router.get("/ledger/customer/:id", requireAuth, async (req, res): Promise<void> 
 
   // Advance sub-ledger (deposits, refunds, auto-applied at POS) with running balance.
   const [advTxnOpening] = await xr(sql`
-    SELECT coalesce(sum(CASE WHEN direction = 'credit' THEN amount::numeric ELSE -amount::numeric END), 0) as opening_adv
+    SELECT coalesce(sum(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) as opening_adv
     FROM customer_transactions
     WHERE customer_id = ${id} AND account = 'advance'
-      AND txn_date::date < cast(${startDate} as date)
+      AND cast(txn_date as date) < cast(${startDate} as date)
   `);
   const advRows = await xr(sql`
     SELECT t.id, t.reference_no as reference, t.txn_date as date, t.txn_type as type,
-      t.direction, t.amount::numeric as amount, t.payment_method as method, t.note
+      t.direction, t.amount as amount, t.payment_method as method, t.note
     FROM customer_transactions t
     WHERE t.customer_id = ${id} AND t.account = 'advance'
-      AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY t.txn_date ASC, t.id ASC
   `);
   let advRunning = Number(advTxnOpening?.opening_adv ?? 0);
@@ -146,9 +146,9 @@ router.get("/ledger/supplier/:id", requireAuth, async (req, res): Promise<void> 
 
   const [supplier] = await xr(sql`
     SELECT id, name, company, phone, email,
-      balance::numeric as balance,
-      advance_balance::numeric as advance_balance,
-      advance_paid_balance::numeric as advance_paid_balance
+      balance as balance,
+      advance_balance as advance_balance,
+      advance_paid_balance as advance_paid_balance
     FROM suppliers WHERE id = ${id}
   `);
   if (!supplier) { res.status(404).json({ error: "Supplier not found" }); return; }
@@ -156,48 +156,48 @@ router.get("/ledger/supplier/:id", requireAuth, async (req, res): Promise<void> 
   // Payable opening = purchase dues − purchase returns + payable transactions, before the window.
   const [[openingData], [openingReturnData], [txnOpening]] = await Promise.all([
     xr(sql`
-      SELECT coalesce(sum(due_amount::numeric), 0) as opening_balance
-      FROM purchases WHERE supplier_id = ${id} AND created_at::date < cast(${startDate} as date)
+      SELECT coalesce(sum(due_amount), 0) as opening_balance
+      FROM purchases WHERE supplier_id = ${id} AND cast(created_at as date) < cast(${startDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(total_amount::numeric), 0) as opening_returns
-      FROM purchase_returns WHERE supplier_id = ${id} AND created_at::date < cast(${startDate} as date)
+      SELECT coalesce(sum(total_amount), 0) as opening_returns
+      FROM purchase_returns WHERE supplier_id = ${id} AND cast(created_at as date) < cast(${startDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END), 0) as opening_txn
+      SELECT coalesce(sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END), 0) as opening_txn
       FROM supplier_transactions
       WHERE supplier_id = ${id} AND account = 'payable'
-        AND txn_date::date < cast(${startDate} as date)
+        AND cast(txn_date as date) < cast(${startDate} as date)
     `),
   ]);
 
   const [purchases, returns, payTxns] = await Promise.all([
     xr(sql`
       SELECT p.id, p.purchase_number as reference, p.created_at as date,
-        'purchase' as type, p.total_amount::numeric as debit, p.paid_amount::numeric as credit,
+        'purchase' as type, p.total_amount as debit, p.paid_amount as credit,
         NULL as method, NULL as note
       FROM purchases p
       WHERE p.supplier_id = ${id}
-        AND p.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(p.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT pr.id, pr.return_number as reference, pr.created_at as date,
-        'return' as type, 0 as debit, pr.total_amount::numeric as credit,
+        'return' as type, 0 as debit, pr.total_amount as credit,
         NULL as method, NULL as note
       FROM purchase_returns pr
       WHERE pr.supplier_id = ${id}
-        AND pr.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(pr.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     // payment_made (credit, reduces payable) and payment_received/adjustment.
     // These are ADDITIONAL to purchases.paid_amount — no double-count.
     xr(sql`
       SELECT t.id, t.reference_no as reference, t.txn_date as date, t.txn_type as type,
-        CASE WHEN t.direction = 'debit' THEN t.amount::numeric ELSE 0 END as debit,
-        CASE WHEN t.direction = 'credit' THEN t.amount::numeric ELSE 0 END as credit,
+        CASE WHEN t.direction = 'debit' THEN t.amount ELSE 0 END as debit,
+        CASE WHEN t.direction = 'credit' THEN t.amount ELSE 0 END as credit,
         t.payment_method as method, t.note as note
       FROM supplier_transactions t
       WHERE t.supplier_id = ${id} AND t.account = 'payable'
-        AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
   ]);
 
@@ -214,17 +214,17 @@ router.get("/ledger/supplier/:id", requireAuth, async (req, res): Promise<void> 
 
   // Advance sub-ledger (advances we paid the supplier, refunds, applications).
   const [advTxnOpening] = await xr(sql`
-    SELECT coalesce(sum(CASE WHEN direction = 'credit' THEN amount::numeric ELSE -amount::numeric END), 0) as opening_adv
+    SELECT coalesce(sum(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) as opening_adv
     FROM supplier_transactions
     WHERE supplier_id = ${id} AND account = 'advance'
-      AND txn_date::date < cast(${startDate} as date)
+      AND cast(txn_date as date) < cast(${startDate} as date)
   `);
   const advRows = await xr(sql`
     SELECT t.id, t.reference_no as reference, t.txn_date as date, t.txn_type as type,
-      t.direction, t.amount::numeric as amount, t.payment_method as method, t.note
+      t.direction, t.amount as amount, t.payment_method as method, t.note
     FROM supplier_transactions t
     WHERE t.supplier_id = ${id} AND t.account = 'advance'
-      AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY t.txn_date ASC, t.id ASC
   `);
   let advRunning = Number(advTxnOpening?.opening_adv ?? 0);

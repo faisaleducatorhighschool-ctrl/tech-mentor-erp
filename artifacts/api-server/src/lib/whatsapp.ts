@@ -41,7 +41,7 @@ export async function loadWhatsappConfig(): Promise<ResolvedWhatsappConfig> {
     await db
       .insert(whatsappConfigTable)
       .values({ id: 1, customBodyTemplate: '{"to":"{{to}}","message":"{{message}}"}' })
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     [row] = await db.select().from(whatsappConfigTable).where(eq(whatsappConfigTable.id, 1));
   }
   return {

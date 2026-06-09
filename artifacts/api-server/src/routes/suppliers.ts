@@ -21,7 +21,7 @@ router.post("/suppliers", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateSupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { name, phone, email, address, company } = parsed.data;
-  const [{ id: _insId }] = await db.insert(suppliersTable).values({ name, phone, email: email ?? null, address: address ?? null, company: company ?? null }).returning({ id: suppliersTable.id });
+  const [{ id: _insId }] = await db.insert(suppliersTable).values({ name, phone, email: email ?? null, address: address ?? null, company: company ?? null }).$returningId();
   const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, _insId));
   res.status(201).json(fmt(s));
 });

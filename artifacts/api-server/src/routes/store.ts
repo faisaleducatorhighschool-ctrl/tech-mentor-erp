@@ -121,7 +121,7 @@ function parseWishlist(raw: string | null | undefined): number[] {
 router.get("/store/settings", async (_req, res): Promise<void> => {
   let [settings] = await db.select().from(settingsTable);
   if (!settings) {
-    const [{ id: newId }] = await db.insert(settingsTable).values({}).returning({ id: settingsTable.id });
+    const [{ id: newId }] = await db.insert(settingsTable).values({}).$returningId();
     [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, newId));
   }
   res.json({
@@ -167,7 +167,7 @@ router.get("/store/products", async (req, res): Promise<void> => {
   const where = and(...conditions);
 
   const [{ total }] = await db
-    .select({ total: sql<number>`count(*)::bigint` })
+    .select({ total: sql<number>`count(*)` })
     .from(productsTable)
     .where(where);
 
@@ -251,7 +251,7 @@ router.get("/store/categories", async (_req, res): Promise<void> => {
       id: categoriesTable.id,
       name: categoriesTable.name,
       description: categoriesTable.description,
-      productCount: sql<number>`(select count(*)::bigint from products where category_id = categories.id and status = 'active'${bizSql})`,
+      productCount: sql<number>`(select count(*) from products where category_id = categories.id and status = 'active'${bizSql})`,
       createdAt: categoriesTable.createdAt,
     })
     .from(categoriesTable)
@@ -275,7 +275,7 @@ router.get("/store/brands", async (_req, res): Promise<void> => {
       id: brandsTable.id,
       name: brandsTable.name,
       description: brandsTable.description,
-      productCount: sql<number>`(select count(*)::bigint from products where brand_id = brands.id and status = 'active')`,
+      productCount: sql<number>`(select count(*) from products where brand_id = brands.id and status = 'active')`,
       createdAt: brandsTable.createdAt,
     })
     .from(brandsTable)
@@ -323,7 +323,7 @@ router.get("/store/featured", async (_req, res): Promise<void> => {
   const bestSelling = await db
     .select({
       ...productFields,
-      totalSold: sql<number>`coalesce((select sum(quantity) from order_items where product_id = products.id), 0)::bigint`,
+      totalSold: sql<number>`coalesce((select sum(quantity) from order_items where product_id = products.id), 0)`,
     })
     .from(productsTable)
     .where(activeCondition)
@@ -370,7 +370,7 @@ router.post("/store/auth/register", async (req, res): Promise<void> => {
   const [{ id: newCustomerId }] = await db
     .insert(customersTable)
     .values({ name, email, phone, passwordHash })
-    .returning({ id: customersTable.id });
+    .$returningId();
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, newCustomerId));
 
   const token = signCustomerToken({ customerId: customer.id, email: customer.email!, type: "customer" });
@@ -553,7 +553,7 @@ router.post("/store/orders", optionalCustomerAuth, async (req, res): Promise<voi
   const totalAmount = subtotal - discountAmount + taxAmount;
 
   const [{ maxNum }] = await db
-    .select({ maxNum: sql<number>`coalesce(max(substring(order_number, 5)::bigint), 0)` })
+    .select({ maxNum: sql<number>`coalesce(max(cast(substring(order_number, 5) as unsigned)), 0)` })
     .from(ordersTable)
     .where(sql`order_number like 'WEB-%'`);
   const nextNum = (maxNum ?? 0) + 1;
@@ -591,7 +591,7 @@ router.post("/store/orders", optionalCustomerAuth, async (req, res): Promise<voi
         notes: orderNotes || null,
         customerToken: customerToken ?? null,
       })
-      .returning({ id: ordersTable.id });
+      .$returningId();
 
     await db.insert(orderItemsTable).values(
       orderItems.map((i) => ({
@@ -637,7 +637,7 @@ router.post("/store/orders", optionalCustomerAuth, async (req, res): Promise<voi
       notes: [deliveryAddress ? `Address: ${deliveryAddress}` : null, notes].filter(Boolean).join(" | ") || null,
       customerToken: customerToken ?? null,
     })
-    .returning({ id: orderItemsTable.id });
+    .$returningId();
 
   await db.insert(orderItemsTable).values(
     orderItems.map((i) => ({

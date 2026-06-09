@@ -9,7 +9,7 @@ const router = Router();
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 function dateRange(req: any) {
@@ -30,12 +30,12 @@ router.get("/reports/sales", requireAuth, async (req, res): Promise<void> => {
   // Net Sales = Gross - Returns. We subtract returns, not just exclude them.
   const [totals] = await xr(sql`
     SELECT
-      coalesce(sum(case when is_return = false then total_amount::numeric else 0 end), 0) as gross_sales,
-      coalesce(sum(case when is_return = true then total_amount::numeric else 0 end), 0) as sales_returns,
+      coalesce(sum(case when is_return = false then total_amount else 0 end), 0) as gross_sales,
+      coalesce(sum(case when is_return = true then total_amount else 0 end), 0) as sales_returns,
       sum(case when is_return = false then 1 else 0 end) as total_orders,
       coalesce(sum(case when is_return = false then (select sum(quantity) from sale_items where sale_id = s.id) else 0 end), 0) as total_items
     FROM sales s
-    WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
   `);
 
   const groupBy = period === "monthly" ? "date_format(created_at, '%Y-%m-01')"
@@ -46,10 +46,10 @@ router.get("/reports/sales", requireAuth, async (req, res): Promise<void> => {
     SELECT
       cast(${sql.raw(groupBy)} as char) as date,
       sum(case when is_return = false then 1 else 0 end) as orders,
-      coalesce(sum(case when is_return = false then total_amount::numeric else 0 end), 0) as gross_sales,
-      coalesce(sum(case when is_return = true then total_amount::numeric else 0 end), 0) as sales_returns
+      coalesce(sum(case when is_return = false then total_amount else 0 end), 0) as gross_sales,
+      coalesce(sum(case when is_return = true then total_amount else 0 end), 0) as sales_returns
     FROM sales
-    WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     GROUP BY ${sql.raw(groupBy)}
     ORDER BY ${sql.raw(groupBy)}
   `);
@@ -121,24 +121,24 @@ router.get("/reports/profit-loss", requireAuth, async (req, res): Promise<void> 
   const [[rev], [cogs], [exp]] = await Promise.all([
     xr(sql`
       SELECT
-        coalesce(sum(case when is_return = false then total_amount::numeric else 0 end), 0) as gross_sales,
-        coalesce(sum(case when is_return = true then total_amount::numeric else 0 end), 0) as sales_returns
+        coalesce(sum(case when is_return = false then total_amount else 0 end), 0) as gross_sales,
+        coalesce(sum(case when is_return = true then total_amount else 0 end), 0) as sales_returns
       FROM sales
-      WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT
-        coalesce(sum(case when s.is_return = false then si.quantity * p.cost_price::numeric else 0 end), 0) as gross_cogs,
-        coalesce(sum(case when s.is_return = true then si.quantity * p.cost_price::numeric else 0 end), 0) as returned_cogs
+        coalesce(sum(case when s.is_return = false then si.quantity * p.cost_price else 0 end), 0) as gross_cogs,
+        coalesce(sum(case when s.is_return = true then si.quantity * p.cost_price else 0 end), 0) as returned_cogs
       FROM sale_items si
       JOIN products p ON p.id = si.product_id
       JOIN sales s ON s.id = si.sale_id
-      WHERE s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(amount::numeric), 0) as expenses
+      SELECT coalesce(sum(amount), 0) as expenses
       FROM expenses
-      WHERE date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
   ]);
 
@@ -170,14 +170,14 @@ router.get("/reports/product-sales", requireAuth, async (req, res): Promise<void
       p.sku,
       coalesce(sum(case when s.is_return then 0 else si.quantity end), 0) as sold_qty,
       coalesce(sum(case when s.is_return then si.quantity else 0 end), 0) as returned_qty,
-      coalesce(sum(case when s.is_return then 0 else si.quantity * si.price::numeric - si.discount::numeric end), 0) as sold_revenue,
-      coalesce(sum(case when s.is_return then si.quantity * si.price::numeric - si.discount::numeric else 0 end), 0) as returned_revenue,
-      coalesce(sum(case when s.is_return then 0 else si.quantity * p.cost_price::numeric end), 0) as sold_cost,
-      coalesce(sum(case when s.is_return then si.quantity * p.cost_price::numeric else 0 end), 0) as returned_cost
+      coalesce(sum(case when s.is_return then 0 else si.quantity * si.price - si.discount end), 0) as sold_revenue,
+      coalesce(sum(case when s.is_return then si.quantity * si.price - si.discount else 0 end), 0) as returned_revenue,
+      coalesce(sum(case when s.is_return then 0 else si.quantity * p.cost_price end), 0) as sold_cost,
+      coalesce(sum(case when s.is_return then si.quantity * p.cost_price else 0 end), 0) as returned_cost
     FROM sale_items si
     JOIN products p ON p.id = si.product_id
     JOIN sales s ON s.id = si.sale_id
-    WHERE s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     GROUP BY p.id, p.name, p.sku
     ORDER BY sold_revenue DESC
   `);
@@ -235,8 +235,8 @@ router.get("/reports/customer-sales", requireAuth, async (req, res): Promise<voi
       c.name as customer_name,
       c.phone,
       count(distinct case when s.is_return = false then s.id end) as total_orders,
-      coalesce(sum((case when s.is_return then -1 else 1 end) * s.total_amount::numeric), 0) as total_amount,
-      coalesce(sum(case when s.is_return = false then s.discount::numeric else 0 end), 0) as total_discount,
+      coalesce(sum((case when s.is_return then -1 else 1 end) * s.total_amount), 0) as total_amount,
+      coalesce(sum(case when s.is_return = false then s.discount else 0 end), 0) as total_discount,
       -- Outstanding Due = the LIVE canonical receivable (same source of truth as
       -- the Ledger + Receivables report), NOT the frozen per-sale due_amount which
       -- ignores later payments and returns.
@@ -245,17 +245,17 @@ router.get("/reports/customer-sales", requireAuth, async (req, res): Promise<voi
       -- transactions). Returns are NOT negative payments — they are already
       -- netted into total_amount — so they must not reduce Paid.
       (
-        coalesce(sum(case when s.is_return = false then s.paid_amount::numeric else 0 end), 0)
+        coalesce(sum(case when s.is_return = false then s.paid_amount else 0 end), 0)
         + coalesce((
-            SELECT sum(case when ct.direction = 'credit' then ct.amount::numeric else -ct.amount::numeric end)
+            SELECT sum(case when ct.direction = 'credit' then ct.amount else -ct.amount end)
             FROM customer_transactions ct
             WHERE ct.customer_id = c.id AND ct.account = 'receivable'
-              AND ct.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+              AND cast(ct.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
           ), 0)
       ) as total_paid
     FROM sales s
     JOIN customers c ON c.id = s.customer_id
-    WHERE s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     GROUP BY c.id, c.name, c.phone
     ORDER BY total_amount DESC
   `);
@@ -293,7 +293,7 @@ router.get("/reports/returns", requireAuth, async (req, res): Promise<void> => {
       ) as items
     FROM sales s
     WHERE s.is_return = true
-      AND s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      AND cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY s.created_at DESC
   `);
   res.json(rows.map(r => ({
@@ -315,26 +315,26 @@ router.get("/reports/discounts", requireAuth, async (req, res): Promise<void> =>
     xr(sql`
       SELECT
         count(*) as total_sales,
-        count(case when discount::numeric > 0 then 1 end) as discounted_sales,
-        coalesce(sum(discount::numeric), 0) as total_discount,
-        coalesce(sum(total_amount::numeric), 0) as total_revenue
+        count(case when discount > 0 then 1 end) as discounted_sales,
+        coalesce(sum(discount), 0) as total_discount,
+        coalesce(sum(total_amount), 0) as total_revenue
       FROM sales
       WHERE is_return = false
-        AND created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+        AND cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT
         s.invoice_number,
         s.created_at,
-        s.discount::numeric as discount,
-        s.subtotal::numeric as subtotal,
-        s.total_amount::numeric as total_amount,
+        s.discount as discount,
+        s.subtotal as subtotal,
+        s.total_amount as total_amount,
         coalesce((select name from customers where id = s.customer_id), 'Walk-in') as customer_name
       FROM sales s
       WHERE s.is_return = false
-        AND s.discount::numeric > 0
-        AND s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
-      ORDER BY s.discount::numeric DESC
+        AND s.discount > 0
+        AND cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      ORDER BY s.discount DESC
     `),
   ]);
 
@@ -364,12 +364,12 @@ router.get("/reports/supplier-purchases", requireAuth, async (req, res): Promise
       s.name as supplier_name,
       s.company,
       count(distinct p.id) as total_orders,
-      coalesce(sum(p.total_amount::numeric), 0) as total_amount,
-      coalesce(sum(p.paid_amount::numeric), 0) as total_paid,
-      coalesce(sum(p.due_amount::numeric), 0) as total_due
+      coalesce(sum(p.total_amount), 0) as total_amount,
+      coalesce(sum(p.paid_amount), 0) as total_paid,
+      coalesce(sum(p.due_amount), 0) as total_due
     FROM purchases p
     JOIN suppliers s ON s.id = p.supplier_id
-    WHERE p.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(p.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     GROUP BY s.id, s.name, s.company
     ORDER BY total_amount DESC
   `);
@@ -394,11 +394,11 @@ router.get("/reports/product-purchases", requireAuth, async (req, res): Promise<
       p.name as product_name,
       p.sku,
       coalesce(sum(pi.quantity), 0) as total_qty,
-      coalesce(sum(pi.quantity * pi.cost_price::numeric), 0) as total_cost
+      coalesce(sum(pi.quantity * pi.cost_price), 0) as total_cost
     FROM purchase_items pi
     JOIN products p ON p.id = pi.product_id
     JOIN purchases pu ON pu.id = pi.purchase_id
-    WHERE pu.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(pu.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     GROUP BY p.id, p.name, p.sku
     ORDER BY total_cost DESC
   `);
@@ -426,7 +426,7 @@ router.get("/reports/stock-movements", requireAuth, async (req, res): Promise<vo
       p.sku
     FROM inventory_movements im
     JOIN products p ON p.id = im.product_id
-    WHERE im.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+    WHERE cast(im.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY im.created_at DESC
     LIMIT 500
   `);
@@ -449,7 +449,7 @@ router.get("/reports/receivables", requireAuth, async (_req, res): Promise<void>
   const rows = await xr(sql`
     SELECT * FROM (
       SELECT c.id as id, c.name as name, c.phone as phone, c.email as email,
-        c.total_orders as total_orders, c.total_spent::numeric as total_spent,
+        c.total_orders as total_orders, c.total_spent as total_spent,
         ${customerReceivableSql(sql`c.id`)} as balance
       FROM customers c
     ) t
@@ -498,21 +498,21 @@ router.get("/reports/expenses-summary", requireAuth, async (req, res): Promise<v
   const { startDate, endDate } = dateRange(req);
   const [categories, rows, [totals]] = await Promise.all([
     xr(sql`
-      SELECT category, count(*) as count, coalesce(sum(amount::numeric), 0) as total
+      SELECT category, count(*) as count, coalesce(sum(amount), 0) as total
       FROM expenses
-      WHERE date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
       GROUP BY category ORDER BY total DESC
     `),
     xr(sql`
-      SELECT id, title, category, amount::numeric as amount, "date", notes
+      SELECT id, title, category, amount as amount, date, notes
       FROM expenses
-      WHERE date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
-      ORDER BY "date" DESC, created_at DESC
+      WHERE cast(date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      ORDER BY date DESC, created_at DESC
     `),
     xr(sql`
-      SELECT coalesce(sum(amount::numeric), 0) as total, count(*) as count
+      SELECT coalesce(sum(amount), 0) as total, count(*) as count
       FROM expenses
-      WHERE date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
   ]);
 
@@ -561,30 +561,30 @@ router.get("/reports/cash-handling", requireAuth, async (req, res): Promise<void
     xr(sql`
       SELECT payment_method,
         sum(case when is_return = false then 1 else 0 end) as count,
-        coalesce(sum((case when is_return then -1 else 1 end) * total_amount::numeric), 0) as total,
-        coalesce(sum((case when is_return then -1 else 1 end) * paid_amount::numeric), 0) as collected,
-        coalesce(sum(case when is_return = false then due_amount::numeric else 0 end), 0) as outstanding
+        coalesce(sum((case when is_return then -1 else 1 end) * total_amount), 0) as total,
+        coalesce(sum((case when is_return then -1 else 1 end) * paid_amount), 0) as collected,
+        coalesce(sum(case when is_return = false then due_amount else 0 end), 0) as outstanding
       FROM sales
-      WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
       GROUP BY payment_method ORDER BY total DESC
     `),
     xr(sql`
       SELECT
-        coalesce(sum((case when is_return then -1 else 1 end) * total_amount::numeric), 0) as total_sales,
-        coalesce(sum((case when is_return then -1 else 1 end) * paid_amount::numeric), 0) as total_collected,
-        coalesce(sum(case when is_return = false then due_amount::numeric else 0 end), 0) as total_due,
+        coalesce(sum((case when is_return then -1 else 1 end) * total_amount), 0) as total_sales,
+        coalesce(sum((case when is_return then -1 else 1 end) * paid_amount), 0) as total_collected,
+        coalesce(sum(case when is_return = false then due_amount else 0 end), 0) as total_due,
         sum(case when is_return = false then 1 else 0 end) as total_transactions
       FROM sales
-      WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT s.invoice_number, s.created_at,
-        s.total_amount::numeric as total, s.paid_amount::numeric as paid, s.due_amount::numeric as due,
+        s.total_amount as total, s.paid_amount as paid, s.due_amount as due,
         coalesce((select name from customers where id = s.customer_id), 'Walk-in') as customer_name
       FROM sales s
-      WHERE s.is_return = false AND s.due_amount::numeric > 0
-        AND s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
-      ORDER BY s.due_amount::numeric DESC LIMIT 100
+      WHERE s.is_return = false AND s.due_amount > 0
+        AND cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      ORDER BY s.due_amount DESC LIMIT 100
     `),
   ]);
 
@@ -612,47 +612,47 @@ router.get("/reports/business-analysis", requireAuth, async (req, res): Promise<
   const [[sales], [purchasesRow], [purchaseReturnsRow], [expensesRow], [cogs], [returns], topProducts] = await Promise.all([
     xr(sql`
       SELECT
-        coalesce(sum(case when is_return = false then total_amount::numeric else 0 end), 0) as gross_sales,
-        coalesce(sum(case when is_return = true then total_amount::numeric else 0 end), 0) as sales_returns,
-        coalesce(sum(case when is_return = false then discount::numeric else 0 end), 0) as discounts,
+        coalesce(sum(case when is_return = false then total_amount else 0 end), 0) as gross_sales,
+        coalesce(sum(case when is_return = true then total_amount else 0 end), 0) as sales_returns,
+        coalesce(sum(case when is_return = false then discount else 0 end), 0) as discounts,
         sum(case when is_return = false then 1 else 0 end) as orders,
         count(distinct case when is_return = false then customer_id end) as unique_customers
       FROM sales
-      WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(total_amount::numeric), 0) as total
-      FROM purchases WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      SELECT coalesce(sum(total_amount), 0) as total
+      FROM purchases WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(total_amount::numeric), 0) as total, count(*) as count
-      FROM purchase_returns WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      SELECT coalesce(sum(total_amount), 0) as total, count(*) as count
+      FROM purchase_returns WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(amount::numeric), 0) as total
-      FROM expenses WHERE date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      SELECT coalesce(sum(amount), 0) as total
+      FROM expenses WHERE cast(date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT
-        coalesce(sum(case when s.is_return = false then si.quantity * p.cost_price::numeric else 0 end), 0) as gross_cogs,
-        coalesce(sum(case when s.is_return = true then si.quantity * p.cost_price::numeric else 0 end), 0) as returned_cogs
+        coalesce(sum(case when s.is_return = false then si.quantity * p.cost_price else 0 end), 0) as gross_cogs,
+        coalesce(sum(case when s.is_return = true then si.quantity * p.cost_price else 0 end), 0) as returned_cogs
       FROM sale_items si
       JOIN products p ON p.id = si.product_id
       JOIN sales s ON s.id = si.sale_id
-      WHERE s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
-      SELECT coalesce(sum(total_amount::numeric), 0) as total, count(*) as count
-      FROM sales WHERE is_return = true AND created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      SELECT coalesce(sum(total_amount), 0) as total, count(*) as count
+      FROM sales WHERE is_return = true AND cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     `),
     xr(sql`
       SELECT p.name,
         coalesce(sum(case when s.is_return then -si.quantity else si.quantity end), 0) as qty,
-        coalesce(sum((case when s.is_return then -1 else 1 end) * (si.quantity * si.price::numeric - si.discount::numeric)), 0) as revenue
+        coalesce(sum((case when s.is_return then -1 else 1 end) * (si.quantity * si.price - si.discount)), 0) as revenue
       FROM sale_items si
       JOIN products p ON p.id = si.product_id
       JOIN sales s ON s.id = si.sale_id
-      WHERE s.created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(s.created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
       GROUP BY p.name ORDER BY revenue DESC LIMIT 5
     `),
   ]);
@@ -694,25 +694,25 @@ router.get("/reports/expiry-products", requireAuth, async (_req, res): Promise<v
   const rows = await xr(sql`
     SELECT
       p.id, p.name, p.sku, p.batch_number, p.mfg_date, p.expiry_date,
-      p.stock, p.cost_price::numeric as cost_price, p.sale_price::numeric as sale_price,
+      p.stock, p.cost_price as cost_price, p.sale_price as sale_price,
       (select name from categories where id = p.category_id) as category_name,
       CASE
-        WHEN p.expiry_date IS NULL OR p.expiry_date NOT ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN 'no_expiry'
-        WHEN p.expiry_date::date < CURRENT_DATE THEN 'expired'
-        WHEN p.expiry_date::date <= date_add(CURRENT_DATE, interval 7 day) THEN 'critical'
-        WHEN p.expiry_date::date <= date_add(CURRENT_DATE, interval 15 day) THEN 'warning'
-        WHEN p.expiry_date::date <= date_add(CURRENT_DATE, interval 30 day) THEN 'near'
+        WHEN p.expiry_date IS NULL OR p.expiry_date NOT REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN 'no_expiry'
+        WHEN cast(p.expiry_date as date) < CURRENT_DATE THEN 'expired'
+        WHEN cast(p.expiry_date as date) <= date_add(CURRENT_DATE, interval 7 day) THEN 'critical'
+        WHEN cast(p.expiry_date as date) <= date_add(CURRENT_DATE, interval 15 day) THEN 'warning'
+        WHEN cast(p.expiry_date as date) <= date_add(CURRENT_DATE, interval 30 day) THEN 'near'
         ELSE 'ok'
       END as expiry_status,
       CASE
-        WHEN p.expiry_date IS NOT NULL AND p.expiry_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-        THEN datediff(p.expiry_date::date, CURRENT_DATE)
+        WHEN p.expiry_date IS NOT NULL AND p.expiry_date REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        THEN datediff(cast(p.expiry_date as date), CURRENT_DATE)
         ELSE NULL
       END as days_to_expiry
     FROM products p
     WHERE p.status = 'active'
     ORDER BY
-      CASE WHEN p.expiry_date IS NULL OR p.expiry_date NOT ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN 2 ELSE 1 END,
+      CASE WHEN p.expiry_date IS NULL OR p.expiry_date NOT REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN 2 ELSE 1 END,
       (p.expiry_date IS NULL), p.expiry_date ASC
   `);
   res.json(rows.map(r => ({
@@ -734,18 +734,18 @@ router.get("/reports/return-reasons", requireAuth, async (req, res): Promise<voi
       SELECT
         coalesce(return_reason, 'not_specified') as reason,
         count(*) as count,
-        coalesce(sum(total_amount::numeric), 0) as total_value
+        coalesce(sum(total_amount), 0) as total_value
       FROM sales
-      WHERE is_return = true AND created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE is_return = true AND cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
       GROUP BY return_reason ORDER BY count DESC
     `),
     xr(sql`
       SELECT
         coalesce(return_reason, 'not_specified') as reason,
         count(*) as count,
-        coalesce(sum(total_amount::numeric), 0) as total_value
+        coalesce(sum(total_amount), 0) as total_value
       FROM purchase_returns
-      WHERE created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      WHERE cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
       GROUP BY return_reason ORDER BY count DESC
     `),
   ]);

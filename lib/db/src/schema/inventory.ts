@@ -1,14 +1,14 @@
-import { pgTable, text, integer, varchar, timestamp, serial } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const inventoryMovementsTable = pgTable("inventory_movements", {
-  id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull(),
+export const inventoryMovementsTable = mysqlTable("inventory_movements", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("product_id").notNull(),
   type: varchar("type", { length: 50 }).notNull(),
-  quantity: integer("quantity").notNull(),
+  quantity: int("quantity").notNull(),
   notes: text("notes"),
-  branchId: integer("branch_id"),
+  branchId: int("branch_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

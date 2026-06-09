@@ -28,7 +28,7 @@ router.post("/cash-collections", requireAuth, async (req, res): Promise<void> =>
   const { employeeId, orderId, amount, type, notes } = parsed.data;
   const [{ id: insId }] = await db.insert(cashCollectionsTable).values({
     employeeId, orderId: orderId ?? null, amount: String(amount), type, notes: notes ?? null,
-  }).returning({ id: cashCollectionsTable.id });
+  }).$returningId();
   const [row] = await db.select().from(cashCollectionsTable).where(eq(cashCollectionsTable.id, insId));
   res.status(201).json({ ...row, employeeName: null, amount: Number(row.amount), createdAt: row.createdAt.toISOString() });
 });
@@ -56,7 +56,7 @@ router.post("/expenses", requireAuth, async (req, res): Promise<void> => {
   const { title, amount, category, date, notes, branchId } = parsed.data;
   const [{ id: insId }] = await db.insert(expensesTable).values({
     title, amount: String(amount), category, date, notes: notes ?? null, branchId: branchId ?? null,
-  }).returning({ id: expensesTable.id });
+  }).$returningId();
   const [row] = await db.select().from(expensesTable).where(eq(expensesTable.id, insId));
   res.status(201).json({ ...row, amount: Number(row.amount), createdAt: row.createdAt.toISOString() });
 });

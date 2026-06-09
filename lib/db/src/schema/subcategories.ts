@@ -1,11 +1,11 @@
-import { pgTable, text, integer, varchar, timestamp, serial } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const subcategoriesTable = pgTable("subcategories", {
-  id: serial("id").primaryKey(),
+export const subcategoriesTable = mysqlTable("subcategories", {
+  id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  categoryId: integer("category_id").notNull(),
+  categoryId: int("category_id").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

@@ -1,12 +1,12 @@
-import { pgTable, text, integer, varchar, timestamp, numeric, serial } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp, decimal } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const cashCollectionsTable = pgTable("cash_collections", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id").notNull(),
-  orderId: integer("order_id"),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+export const cashCollectionsTable = mysqlTable("cash_collections", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employee_id").notNull(),
+  orderId: int("order_id"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   type: varchar("type", { length: 50 }).notNull().default("collected"),
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   notes: text("notes"),

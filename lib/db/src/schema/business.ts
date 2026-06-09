@@ -1,9 +1,9 @@
-import { pgTable, integer, varchar, timestamp, serial, json } from "drizzle-orm/pg-core";
+import { mysqlTable, int, varchar, timestamp, json } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const businessConfigTable = pgTable("business_config", {
-  id: serial("id").primaryKey(),
+export const businessConfigTable = mysqlTable("business_config", {
+  id: int("id").autoincrement().primaryKey(),
   activeBusinessTypes: json("active_business_types").$type<string[]>().notNull().default([]),
   primaryBusinessType: varchar("primary_business_type", { length: 50 }),
   enabledModules: json("enabled_modules").$type<Record<string, boolean>>().notNull().default({}),
@@ -11,8 +11,8 @@ export const businessConfigTable = pgTable("business_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const unitsTable = pgTable("units", {
-  id: serial("id").primaryKey(),
+export const unitsTable = mysqlTable("units", {
+  id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 191 }).notNull().unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

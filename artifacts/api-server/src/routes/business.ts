@@ -23,7 +23,7 @@ async function loadConfig(): Promise<ConfigRow> {
   await db
     .insert(businessConfigTable)
     .values({ id: 1, activeBusinessTypes: [], enabledModules: {}, appliedPacks: [] })
-    .onConflictDoNothing();
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
   const [row] = await db.select().from(businessConfigTable).where(eq(businessConfigTable.id, 1));
   return row;
 }
@@ -98,7 +98,7 @@ router.post("/business/packs/:key/apply", requireAuth, requireAdmin, async (req,
     const names = pack.categories.map((c) => c.name);
     await db.insert(categoriesTable)
       .values(pack.categories.map((c) => ({ name: c.name, description: c.description ?? null })))
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     const inserted = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(inArray(categoriesTable.name, names));
     applied.categories = inserted.length;
   }
@@ -107,7 +107,7 @@ router.post("/business/packs/:key/apply", requireAuth, requireAdmin, async (req,
     const names = pack.brands.map((b) => b.name);
     await db.insert(brandsTable)
       .values(pack.brands.map((b) => ({ name: b.name, description: b.description ?? null })))
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     const inserted = await db.select({ id: brandsTable.id }).from(brandsTable).where(inArray(brandsTable.name, names));
     applied.brands = inserted.length;
   }
@@ -115,7 +115,7 @@ router.post("/business/packs/:key/apply", requireAuth, requireAdmin, async (req,
   if (pack.units.length) {
     await db.insert(unitsTable)
       .values(pack.units.map((name) => ({ name })))
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     const inserted = await db.select({ id: unitsTable.id }).from(unitsTable).where(inArray(unitsTable.name, pack.units));
     applied.units = inserted.length;
   }
@@ -147,7 +147,7 @@ router.post("/business/packs/:key/apply", requireAuth, requireAdmin, async (req,
         lowStockLimit: p.lowStockLimit ?? 10,
         unit: p.unit ?? "PCS",
       })))
-      .onConflictDoNothing();
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
     const skus = pack.sampleProducts.map((p) => p.sku);
     const inserted = await db.select({ id: productsTable.id }).from(productsTable).where(inArray(productsTable.sku, skus));
     applied.products = inserted.length;

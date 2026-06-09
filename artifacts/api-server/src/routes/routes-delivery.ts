@@ -28,7 +28,7 @@ router.post("/routes", requireAuth, async (req, res): Promise<void> => {
   const { name, area, vehicle, employeeId, deliveryDate } = parsed.data;
   const [{ id: _insId }] = await db.insert(deliveryRoutesTable).values({
     name, area, vehicle: vehicle ?? null, employeeId: employeeId ?? null, deliveryDate: deliveryDate ?? null,
-  }).returning({ id: deliveryRoutesTable.id });
+  }).$returningId();
   const [route] = await db.select().from(deliveryRoutesTable).where(eq(deliveryRoutesTable.id, _insId));
   res.status(201).json({ ...route, employeeName: null, createdAt: route.createdAt.toISOString() });
 });
@@ -83,7 +83,7 @@ router.post("/deliveries", requireAuth, async (req, res): Promise<void> => {
   const { orderId, employeeId, routeId, notes } = parsed.data;
   const [{ id: _insId }] = await db.insert(deliveryAssignmentsTable).values({
     orderId, employeeId, routeId: routeId ?? null, notes: notes ?? null,
-  }).returning({ id: deliveryAssignmentsTable.id });
+  }).$returningId();
   const [d] = await db.select().from(deliveryAssignmentsTable).where(eq(deliveryAssignmentsTable.id, _insId));
   res.status(201).json({ ...d, orderNumber: null, employeeName: null, deliveredAt: null, createdAt: d.createdAt.toISOString() });
 });

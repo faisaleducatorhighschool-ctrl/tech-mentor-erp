@@ -9,16 +9,16 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — MySQL connection string (`mysql://user:pass@host:3306/dbname`)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - API: Express 5 (port 8080, path `/api`)
-- DB: PostgreSQL + Drizzle ORM (23 tables)
+- DB: MySQL + Drizzle ORM (mysql2 driver, 23 tables)
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec in `lib/api-spec/openapi.yaml`)
-- Build: esbuild (CJS bundle)
+- Build: esbuild (ESM bundle → `dist/index.mjs`)
 - Customer web app: React + Vite (`/customer-app/`)
 - Customer Android app: Expo (`/artifacts/customer-mobile/`) — EAS builds only, not a Replit workflow
 - Staff app: Expo React Native (`/employee-app/`)
@@ -38,8 +38,9 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 
 ## Architecture decisions
 
-- Originally MySQL; migrated to PostgreSQL — use `::bigint` not `CAST(x AS UNSIGNED)`, `CURRENT_DATE` not `CURDATE()`, `~` for regex not `REGEXP`.
-- All raw SQL fragments in drizzle `sql\`...\`` must use PostgreSQL syntax.
+- Database is MySQL (mysql2 driver). All raw SQL in drizzle `sql\`...\`` must use MySQL syntax: `CAST(x AS DATE)` not `x::date`, no `::numeric`/`::bigint` casts (decimal columns are already numeric), `REGEXP` not `~`, `INTERVAL N DAY` not `INTERVAL 'N days'`, `DATE_FORMAT(...)` not `to_char`/`date_trunc`, backtick (or unquoted) identifiers not double-quotes. `CURRENT_DATE`, `NOW()`, `coalesce`, `substring`, `GREATEST` work in both.
+- MySQL has no `RETURNING`: inserts use Drizzle `.$returningId()` (returns `[{ id }]`) then re-select the row. `db.execute(sql\`SELECT...\`)` returns `[rows, fields]` — read rows via index `[0]` (the route helpers handle both this and pg's `.rows`).
+- Upserts use `.onDuplicateKeyUpdate({ set })`; no-op (insert-ignore) upserts use `set: { id: sql\`id\` }`.
 - The shared proxy routes `/api` → API server, `/customer-app` → web app. No Vite proxy config needed.
 - JWT auth: staff tokens via `/api/auth/login`, customer tokens via `/api/store/auth/login`.
 - `SESSION_SECRET` env var is used as the JWT signing key.
@@ -76,8 +77,9 @@ Full-stack ERP system for Faisal Book Depot, Khanpur. Two client apps share one 
 
 ## Gotchas
 
-- After any schema change run `pnpm --filter @workspace/db run push` then `pnpm --filter @workspace/api-spec run codegen`.
-- PostgreSQL not MySQL: no `CAST(x AS UNSIGNED)` — use `x::bigint`. No `CURDATE()` — use `CURRENT_DATE`. No backtick identifiers.
+- After any schema change run `pnpm --filter @workspace/db run push` (needs a live MySQL `DATABASE_URL`) then `pnpm --filter @workspace/api-spec run codegen`. On Hostinger you can instead import the provided SQL dump directly.
+- MySQL not PostgreSQL: write all raw `sql\`...\`` fragments in MySQL syntax (see Architecture decisions above).
+- Production entry file is `artifacts/api-server/dist/index.mjs` (ESM bundle), not `dist/index.js`. Set this as the Hostinger Node entry point.
 - `pnpm run dev` at root does not exist by design. Start individual services via workflows.
 - Employee-app uses Expo Go; run via `restart_workflow "artifacts/employee-app: expo"`.
 - Customer-mobile is NOT a Replit workflow artifact (only one mobile slot available); build via `cd artifacts/customer-mobile && eas build --platform android --profile preview`.

@@ -25,7 +25,7 @@ router.post("/users", requireAuth, async (req, res): Promise<void> => {
   const passwordHash = await hashPassword(password);
   const [{ id: _insId }] = await db.insert(usersTable).values({
     username, passwordHash, name, email: email ?? null, role, branchId: branchId ?? null,
-  }).returning({ id: usersTable.id });
+  }).$returningId();
   const [u] = await db.select().from(usersTable).where(eq(usersTable.id, _insId));
   res.status(201).json(fmt(u));
 });

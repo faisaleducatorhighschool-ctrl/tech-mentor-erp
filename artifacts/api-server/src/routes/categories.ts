@@ -20,7 +20,7 @@ router.get("/categories", requireAuth, async (_req, res): Promise<void> => {
 router.post("/categories", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [{ id: _insId }] = await db.insert(categoriesTable).values(parsed.data).returning({ id: categoriesTable.id });
+  const [{ id: _insId }] = await db.insert(categoriesTable).values(parsed.data).$returningId();
   const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, _insId));
   res.status(201).json({ ...cat, productCount: 0, createdAt: cat.createdAt.toISOString() });
 });

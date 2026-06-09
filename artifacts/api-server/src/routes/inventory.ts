@@ -46,7 +46,7 @@ router.post("/inventory", requireAuth, async (req, res): Promise<void> => {
     quantity,
     notes: notes ?? null,
     branchId: branchId ?? null,
-  }).returning({ id: inventoryMovementsTable.id });
+  }).$returningId();
   const [movement] = await db.select().from(inventoryMovementsTable).where(eq(inventoryMovementsTable.id, movementId));
 
   res.status(201).json({

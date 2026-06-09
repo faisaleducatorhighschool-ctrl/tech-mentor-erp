@@ -1,19 +1,19 @@
-import { pgTable, text, integer, varchar, timestamp, boolean, serial, index } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp, boolean, index } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const notificationsTable = pgTable("notifications", {
-  id: serial("id").primaryKey(),
+export const notificationsTable = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
   type: varchar("type", { length: 50 }).notNull().default("info"),
   isRead: boolean("is_read").notNull().default(false),
-  referenceId: integer("reference_id"),
+  referenceId: int("reference_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const whatsappTemplatesTable = pgTable("whatsapp_templates", {
-  id: serial("id").primaryKey(),
+export const whatsappTemplatesTable = mysqlTable("whatsapp_templates", {
+  id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   trigger: varchar("trigger", { length: 100 }).notNull(),
   message: text("message").notNull(),
@@ -24,10 +24,10 @@ export const whatsappTemplatesTable = pgTable("whatsapp_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const whatsappLogsTable = pgTable("whatsapp_logs", {
-  id: serial("id").primaryKey(),
+export const whatsappLogsTable = mysqlTable("whatsapp_logs", {
+  id: int("id").autoincrement().primaryKey(),
   entityType: varchar("entity_type", { length: 20 }).notNull().default("manual"),
-  entityId: integer("entity_id"),
+  entityId: int("entity_id"),
   recipientName: varchar("recipient_name", { length: 255 }),
   phone: varchar("phone", { length: 50 }).notNull(),
   trigger: varchar("trigger", { length: 100 }),
@@ -36,15 +36,15 @@ export const whatsappLogsTable = pgTable("whatsapp_logs", {
   status: varchar("status", { length: 20 }).notNull().default("sent"),
   error: text("error"),
   provider: varchar("provider", { length: 50 }),
-  createdById: integer("created_by_id"),
+  createdById: int("created_by_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
   index("whatsapp_log_created_idx").on(t.createdAt),
   index("whatsapp_log_entity_idx").on(t.entityType, t.entityId),
 ]);
 
-export const settingsTable = pgTable("settings", {
-  id: serial("id").primaryKey(),
+export const settingsTable = mysqlTable("settings", {
+  id: int("id").autoincrement().primaryKey(),
   storeName: varchar("store_name", { length: 255 }).notNull().default("My Store"),
   storePhone: varchar("store_phone", { length: 50 }),
   storeEmail: varchar("store_email", { length: 255 }),
@@ -72,8 +72,8 @@ export const settingsTable = pgTable("settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const whatsappConfigTable = pgTable("whatsapp_config", {
-  id: serial("id").primaryKey(),
+export const whatsappConfigTable = mysqlTable("whatsapp_config", {
+  id: int("id").autoincrement().primaryKey(),
   automationEnabled: boolean("automation_enabled").notNull().default(false),
   provider: varchar("provider", { length: 50 }).notNull().default("wasms"),
   defaultLanguage: varchar("default_language", { length: 5 }).notNull().default("en"),

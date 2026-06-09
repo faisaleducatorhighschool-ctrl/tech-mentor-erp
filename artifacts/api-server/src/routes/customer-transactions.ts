@@ -12,7 +12,7 @@ type TxnType = (typeof TXN_TYPES)[number];
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 function dateRange(req: any, defaultDays = 30) {
@@ -71,7 +71,7 @@ router.post("/customers/:id/transactions", requireAuth, async (req, res): Promis
     const result = await db.transaction(async (tx) => {
       const xrt = async (q: ReturnType<typeof sql>): Promise<any[]> => {
         const r = (await tx.execute(q)) as any;
-        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
       };
       // Insert one transaction row and stamp its reference number from the row id.
       const insertTxn = async (
@@ -83,7 +83,7 @@ router.post("/customers/:id/transactions", requireAuth, async (req, res): Promis
           bankRef: bankRef ?? null, note: noteText,
           txnDate: txnDate ? new Date(txnDate) : new Date(),
           createdById: req.user?.userId ?? null,
-        }).returning({ id: customerTransactionsTable.id });
+        }).$returningId();
         const ref = `${REF_PREFIX[tType] ?? "TXN"}-${String(txnId).padStart(6, "0")}`;
         await tx.execute(sql`UPDATE customer_transactions SET reference_no = ${ref} WHERE id = ${txnId}`);
         return { txnId, referenceNo: ref };
@@ -92,8 +92,8 @@ router.post("/customers/:id/transactions", requireAuth, async (req, res): Promis
       // Lock the customer row: advance updates must serialize.
       const [cust] = await xrt(sql`
         SELECT id, name, phone,
-          advance_balance::numeric as advance_balance,
-          advance_paid_balance::numeric as advance_paid_balance
+          advance_balance as advance_balance,
+          advance_paid_balance as advance_paid_balance
         FROM customers WHERE id = ${id} FOR UPDATE
       `);
       if (!cust) throw new HttpError(404, "Customer not found");
@@ -200,7 +200,7 @@ router.get("/reports/customer-transactions", requireAuth, async (req, res): Prom
   const customerId = req.query.customerId ? Number(req.query.customerId) : null;
   const txnType = req.query.txnType ? String(req.query.txnType) : null;
 
-  const conds = [sql`t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`];
+  const conds = [sql`cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`];
   if (customerId) conds.push(sql`t.customer_id = ${customerId}`);
   if (txnType) conds.push(sql`t.txn_type = ${txnType}`);
   const where = sql.join(conds, sql` AND `);
@@ -209,7 +209,7 @@ router.get("/reports/customer-transactions", requireAuth, async (req, res): Prom
     SELECT t.id, t.reference_no, t.customer_id,
       (SELECT name FROM customers WHERE id = t.customer_id) as customer_name,
       t.account, t.txn_type, t.direction,
-      t.amount::numeric as amount,
+      t.amount as amount,
       t.payment_method, t.bank_ref, t.note, t.txn_date,
       (SELECT name FROM users WHERE id = t.created_by_id) as created_by_name
     FROM customer_transactions t
@@ -245,10 +245,10 @@ router.get("/reports/customer-collections", requireAuth, async (req, res): Promi
   const rows = await xr(sql`
     SELECT t.id, t.reference_no, t.customer_id,
       (SELECT name FROM customers WHERE id = t.customer_id) as customer_name,
-      t.txn_type, t.payment_method, t.amount::numeric as amount, t.txn_date
+      t.txn_type, t.payment_method, t.amount as amount, t.txn_date
     FROM customer_transactions t
     WHERE t.txn_type IN ('payment_received','advance_deposit')
-      AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY t.txn_date DESC, t.id DESC
   `);
 
@@ -275,11 +275,11 @@ router.get("/reports/customer-collections", requireAuth, async (req, res): Promi
 router.get("/reports/customer-advances", requireAuth, async (_req, res): Promise<void> => {
   const rows = await xr(sql`
     SELECT id, name, phone,
-      advance_balance::numeric as advance_balance,
-      advance_paid_balance::numeric as advance_paid_balance
+      advance_balance as advance_balance,
+      advance_paid_balance as advance_paid_balance
     FROM customers
-    WHERE advance_balance::numeric > 0.009
-    ORDER BY advance_balance::numeric DESC
+    WHERE advance_balance > 0.009
+    ORDER BY advance_balance DESC
   `);
   const totalAdvance = rows.reduce((s, r) => s + Number(r.advance_balance), 0);
   res.json({
@@ -298,7 +298,7 @@ router.get("/reports/customer-outstanding", requireAuth, async (_req, res): Prom
   const rows = await xr(sql`
     SELECT * FROM (
       SELECT c.id AS id, c.name AS name, c.phone AS phone,
-        c.advance_balance::numeric AS advance,
+        c.advance_balance AS advance,
         ${customerReceivableSql(sql`c.id`)} AS receivable
       FROM customers c
     ) t
@@ -326,23 +326,23 @@ router.get("/reports/customer-aging", requireAuth, async (req, res): Promise<voi
 
   // Open invoice dues (oldest first per customer).
   const dues = await xr(sql`
-    SELECT customer_id, created_at, due_amount::numeric as due
+    SELECT customer_id, created_at, due_amount as due
     FROM sales
-    WHERE is_return = false AND customer_id IS NOT NULL AND due_amount::numeric > 0.009
+    WHERE is_return = false AND customer_id IS NOT NULL AND due_amount > 0.009
     ORDER BY customer_id ASC, created_at ASC, id ASC
   `);
 
   // Non-invoice credits per customer = payment_received + returns + (adj credit − adj debit).
   const creditRows = await xr(sql`
     SELECT customer_id, sum(amt) as credit FROM (
-      SELECT customer_id, amount::numeric as amt
+      SELECT customer_id, amount as amt
         FROM customer_transactions WHERE account = 'receivable' AND direction = 'credit' AND txn_type <> 'adjustment'
       UNION ALL
-      SELECT customer_id, amount::numeric FROM customer_transactions WHERE account = 'receivable' AND txn_type = 'adjustment' AND direction = 'credit'
+      SELECT customer_id, amount FROM customer_transactions WHERE account = 'receivable' AND txn_type = 'adjustment' AND direction = 'credit'
       UNION ALL
-      SELECT customer_id, -amount::numeric FROM customer_transactions WHERE account = 'receivable' AND txn_type = 'adjustment' AND direction = 'debit'
+      SELECT customer_id, -amount FROM customer_transactions WHERE account = 'receivable' AND txn_type = 'adjustment' AND direction = 'debit'
       UNION ALL
-      SELECT customer_id, total_amount::numeric FROM sales WHERE is_return = true AND customer_id IS NOT NULL
+      SELECT customer_id, total_amount FROM sales WHERE is_return = true AND customer_id IS NOT NULL
     ) x
     GROUP BY customer_id
   `);

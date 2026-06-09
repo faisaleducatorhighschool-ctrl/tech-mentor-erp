@@ -154,7 +154,7 @@ router.post("/sales", requireAuth, async (req, res): Promise<void> => {
     subtotal: String(subtotal), discount: String(discount ?? 0), tax: String(tax ?? 0),
     totalAmount: String(totalAmount), paidAmount: String(paidAmount ?? totalAmount), dueAmount: String(due),
     createdById: req.user?.userId ?? null,
-  }).returning({ id: salesTable.id });
+  }).$returningId();
   await db.insert(saleItemsTable).values(items.map(i => ({
     saleId: saleId, productId: i.productId, quantity: i.quantity,
     price: String(i.price), discount: String(i.discount ?? 0),
@@ -169,14 +169,14 @@ router.post("/sales", requireAuth, async (req, res): Promise<void> => {
   if (customerId && due > 0.009) {
     try {
       advanceApplied = await db.transaction(async (tx) => {
-        const r = (await tx.execute(sql`SELECT advance_balance::numeric as adv, advance_paid_balance::numeric as paid FROM customers WHERE id = ${customerId} FOR UPDATE`)) as any;
+        const r = (await tx.execute(sql`SELECT advance_balance as adv, advance_paid_balance as paid FROM customers WHERE id = ${customerId} FOR UPDATE`)) as any;
         const row = Array.isArray(r) && Array.isArray(r[0]) ? r[0][0] : (Array.isArray(r) ? r[0] : r?.rows?.[0]);
         const advance = Number(row?.adv ?? 0);
         if (advance <= 0.009) return 0;
         const apply = Math.min(advance, due);
         if (apply <= 0.009) return 0;
-        await tx.execute(sql`UPDATE sales SET paid_amount = paid_amount::numeric + ${String(apply.toFixed(2))}, due_amount = due_amount::numeric - ${String(apply.toFixed(2))} WHERE id = ${saleId}`);
-        await tx.execute(sql`UPDATE customers SET advance_balance = advance_balance::numeric - ${String(apply.toFixed(2))}, advance_paid_balance = advance_paid_balance::numeric + ${String(apply.toFixed(2))} WHERE id = ${customerId}`);
+        await tx.execute(sql`UPDATE sales SET paid_amount = paid_amount + ${String(apply.toFixed(2))}, due_amount = due_amount - ${String(apply.toFixed(2))} WHERE id = ${saleId}`);
+        await tx.execute(sql`UPDATE customers SET advance_balance = advance_balance - ${String(apply.toFixed(2))}, advance_paid_balance = advance_paid_balance + ${String(apply.toFixed(2))} WHERE id = ${customerId}`);
         const ins = (await tx.execute(sql`INSERT INTO customer_transactions (customer_id, account, txn_type, direction, amount, payment_method, reference_no, note, txn_date, created_by_id) VALUES (${customerId}, 'advance', 'advance_applied', 'debit', ${String(apply.toFixed(2))}, 'advance', 'PENDING', ${`Applied to invoice ${invoiceNumber}`}, NOW(), ${req.user?.userId ?? null})`)) as any;
         const newId = Array.isArray(ins) ? (ins[0]?.insertId ?? (ins[0] as any)?.[0]?.insertId) : ins?.insertId;
         if (newId) await tx.execute(sql`UPDATE customer_transactions SET reference_no = ${`APD-${String(newId).padStart(6, "0")}`} WHERE id = ${newId}`);
@@ -247,7 +247,7 @@ router.post("/sales/manual-return", requireAuth, async (req, res): Promise<void>
     subtotal: String(subtotal), discount: "0", tax: "0",
     totalAmount: String(subtotal), paidAmount: String(subtotal), dueAmount: "0",
     isReturn: true, returnReason: String(returnReason), createdById: req.user?.userId ?? null,
-  }).returning({ id: saleItemsTable.id });
+  }).$returningId();
   await db.insert(saleItemsTable).values(items.map((i: any) => ({
     saleId: saleId, productId: Number(i.productId), quantity: Number(i.quantity),
     price: String(i.price), discount: "0",
@@ -362,7 +362,7 @@ router.post("/sales/:id/return", requireAuth, async (req, res): Promise<void> =>
     subtotal: String(subtotal), discount: "0", tax: "0",
     totalAmount: String(subtotal), paidAmount: String(subtotal), dueAmount: "0",
     isReturn: true, returnReason: String(returnReason), originalSaleId: id, createdById: req.user?.userId ?? null,
-  }).returning({ id: saleItemsTable.id });
+  }).$returningId();
   await db.insert(saleItemsTable).values(items.map((i: any) => ({
     saleId: saleId, productId: Number(i.productId), quantity: Number(i.quantity),
     price: String(netUnitPrice(Number(i.productId))), discount: "0",

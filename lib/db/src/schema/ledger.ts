@@ -1,16 +1,16 @@
-import { pgTable, text, integer, varchar, timestamp, numeric, serial } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, varchar, timestamp, decimal } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const ledgerEntriesTable = pgTable("ledger_entries", {
-  id: serial("id").primaryKey(),
+export const ledgerEntriesTable = mysqlTable("ledger_entries", {
+  id: int("id").autoincrement().primaryKey(),
   entityType: varchar("entity_type", { length: 50 }).notNull(),
-  entityId: integer("entity_id").notNull(),
+  entityId: int("entity_id").notNull(),
   type: varchar("type", { length: 50 }).notNull(),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-  balance: numeric("balance", { precision: 12, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  balance: decimal("balance", { precision: 12, scale: 2 }).notNull(),
   description: text("description").notNull(),
-  referenceId: integer("reference_id"),
+  referenceId: int("reference_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

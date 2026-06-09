@@ -20,7 +20,7 @@ router.get("/brands", requireAuth, async (_req, res): Promise<void> => {
 router.post("/brands", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateBrandBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [{ id: _insId }] = await db.insert(brandsTable).values(parsed.data).returning({ id: brandsTable.id });
+  const [{ id: _insId }] = await db.insert(brandsTable).values(parsed.data).$returningId();
   const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, _insId));
   res.status(201).json({ ...brand, productCount: 0, createdAt: brand.createdAt.toISOString() });
 });

@@ -36,7 +36,7 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
     email: email ?? null,
     address: address ?? null,
     creditLimit: String(creditLimit ?? 0),
-  }).returning({ id: customersTable.id });
+  }).$returningId();
   const [c] = await db.select().from(customersTable).where(eq(customersTable.id, _insId));
   void triggerAutomation({ trigger: "customer_registered", customerId: c.id }, req.log);
   res.status(201).json(fmtCustomer(c));

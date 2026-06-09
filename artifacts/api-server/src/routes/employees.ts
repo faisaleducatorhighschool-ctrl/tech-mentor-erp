@@ -27,7 +27,7 @@ router.post("/employees", requireAuth, async (req, res): Promise<void> => {
     employeeId: empId, username: username ?? null, name, phone, email: email ?? null, cnic: cnic ?? null,
     address: address ?? null, role, salary: String(salary), joiningDate,
     branchId: branchId ?? null,
-  }).returning({ id: employeesTable.id });
+  }).$returningId();
   const [e] = await db.select().from(employeesTable).where(eq(employeesTable.id, _insId));
   res.status(201).json(fmt(e));
 });

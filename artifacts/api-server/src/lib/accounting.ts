@@ -11,7 +11,7 @@ export interface SqlExecutor {
 // driver shape.
 async function rows(exec: SqlExecutor, query: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await exec.execute(query)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 // Canonical customer-receivable SQL expression (the ONE source of truth).
@@ -25,13 +25,13 @@ async function rows(exec: SqlExecutor, query: ReturnType<typeof sql>): Promise<a
 export function customerReceivableSql(idExpr: ReturnType<typeof sql>) {
   return sql`(
     coalesce((
-      SELECT sum(CASE WHEN is_return = false THEN due_amount::numeric
-                      ELSE -total_amount::numeric END)
+      SELECT sum(CASE WHEN is_return = false THEN due_amount
+                      ELSE -total_amount END)
       FROM sales WHERE customer_id = ${idExpr}
     ), 0)
     + coalesce((
-      SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric
-                      ELSE -amount::numeric END)
+      SELECT sum(CASE WHEN direction = 'debit' THEN amount
+                      ELSE -amount END)
       FROM customer_transactions WHERE customer_id = ${idExpr} AND account = 'receivable'
     ), 0)
   )`;
@@ -42,11 +42,11 @@ export function customerReceivableSql(idExpr: ReturnType<typeof sql>) {
 //   + payable transactions (debit increases, credit decreases)
 export function supplierPayableSql(idExpr: ReturnType<typeof sql>) {
   return sql`(
-    coalesce((SELECT sum(due_amount::numeric) FROM purchases WHERE supplier_id = ${idExpr}), 0)
-    - coalesce((SELECT sum(total_amount::numeric) FROM purchase_returns WHERE supplier_id = ${idExpr}), 0)
+    coalesce((SELECT sum(due_amount) FROM purchases WHERE supplier_id = ${idExpr}), 0)
+    - coalesce((SELECT sum(total_amount) FROM purchase_returns WHERE supplier_id = ${idExpr}), 0)
     + coalesce((
-      SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric
-                      ELSE -amount::numeric END)
+      SELECT sum(CASE WHEN direction = 'debit' THEN amount
+                      ELSE -amount END)
       FROM supplier_transactions WHERE supplier_id = ${idExpr} AND account = 'payable'
     ), 0)
   )`;

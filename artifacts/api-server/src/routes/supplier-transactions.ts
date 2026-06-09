@@ -21,7 +21,7 @@ const ADVANCE_DEBIT_TYPES = new Set<TxnType>(["advance_received", "supplier_refu
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 function dateRange(req: any, defaultDays = 30) {
@@ -82,7 +82,7 @@ router.post("/suppliers/:id/transactions", requireAuth, async (req, res): Promis
     const result = await db.transaction(async (tx) => {
       const xrt = async (q: ReturnType<typeof sql>): Promise<any[]> => {
         const r = (await tx.execute(q)) as any;
-        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+        return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
       };
 
       // Insert one transaction row and stamp its reference number from the row id.
@@ -95,7 +95,7 @@ router.post("/suppliers/:id/transactions", requireAuth, async (req, res): Promis
           bankRef: bankRef ?? null, note: noteText,
           txnDate: txnDate ? new Date(txnDate) : new Date(),
           createdById: req.user?.userId ?? null,
-        }).returning({ id: supplierTransactionsTable.id });
+        }).$returningId();
         const ref = `${REF_PREFIX[tType] ?? "STX"}-${String(txnId).padStart(6, "0")}`;
         await tx.execute(sql`UPDATE supplier_transactions SET reference_no = ${ref} WHERE id = ${txnId}`);
         return { txnId, referenceNo: ref };
@@ -104,8 +104,8 @@ router.post("/suppliers/:id/transactions", requireAuth, async (req, res): Promis
       // Lock the supplier row: advance updates must serialize.
       const [sup] = await xrt(sql`
         SELECT id, name, phone,
-          advance_balance::numeric as advance_balance,
-          advance_paid_balance::numeric as advance_paid_balance
+          advance_balance as advance_balance,
+          advance_paid_balance as advance_paid_balance
         FROM suppliers WHERE id = ${id} FOR UPDATE
       `);
       if (!sup) throw new HttpError(404, "Supplier not found");
@@ -215,7 +215,7 @@ router.get("/reports/supplier-transactions", requireAuth, async (req, res): Prom
   const supplierId = req.query.supplierId ? Number(req.query.supplierId) : null;
   const txnType = req.query.txnType ? String(req.query.txnType) : null;
 
-  const conds = [sql`t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`];
+  const conds = [sql`cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`];
   if (supplierId) conds.push(sql`t.supplier_id = ${supplierId}`);
   if (txnType) conds.push(sql`t.txn_type = ${txnType}`);
   const where = sql.join(conds, sql` AND `);
@@ -224,7 +224,7 @@ router.get("/reports/supplier-transactions", requireAuth, async (req, res): Prom
     SELECT t.id, t.reference_no, t.supplier_id,
       (SELECT name FROM suppliers WHERE id = t.supplier_id) as supplier_name,
       t.account, t.txn_type, t.direction,
-      t.amount::numeric as amount,
+      t.amount as amount,
       t.payment_method, t.bank_ref, t.note, t.txn_date,
       (SELECT name FROM users WHERE id = t.created_by_id) as created_by_name
     FROM supplier_transactions t
@@ -262,10 +262,10 @@ router.get("/reports/supplier-payments", requireAuth, async (req, res): Promise<
   const rows = await xr(sql`
     SELECT t.id, t.reference_no, t.supplier_id,
       (SELECT name FROM suppliers WHERE id = t.supplier_id) as supplier_name,
-      t.txn_type, t.payment_method, t.amount::numeric as amount, t.txn_date
+      t.txn_type, t.payment_method, t.amount as amount, t.txn_date
     FROM supplier_transactions t
     WHERE t.txn_type IN ('payment_made','advance_paid')
-      AND t.txn_date::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
+      AND cast(t.txn_date as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)
     ORDER BY t.txn_date DESC, t.id DESC
   `);
 
@@ -292,11 +292,11 @@ router.get("/reports/supplier-payments", requireAuth, async (req, res): Promise<
 router.get("/reports/supplier-advances", requireAuth, async (_req, res): Promise<void> => {
   const rows = await xr(sql`
     SELECT id, name, phone,
-      advance_balance::numeric as advance_balance,
-      advance_paid_balance::numeric as advance_paid_balance
+      advance_balance as advance_balance,
+      advance_paid_balance as advance_paid_balance
     FROM suppliers
-    WHERE advance_balance::numeric > 0.009
-    ORDER BY advance_balance::numeric DESC
+    WHERE advance_balance > 0.009
+    ORDER BY advance_balance DESC
   `);
   const totalAdvance = rows.reduce((s, r) => s + Number(r.advance_balance), 0);
   res.json({
@@ -317,7 +317,7 @@ router.get("/reports/supplier-outstanding", requireAuth, async (_req, res): Prom
   const rows = await xr(sql`
     SELECT * FROM (
       SELECT s.id AS id, s.name AS name, s.phone AS phone,
-        s.advance_balance::numeric AS advance,
+        s.advance_balance AS advance,
         ${supplierPayableSql(sql`s.id`)} AS payable
       FROM suppliers s
     ) t

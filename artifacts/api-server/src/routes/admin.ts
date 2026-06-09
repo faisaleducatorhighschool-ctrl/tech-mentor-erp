@@ -22,7 +22,7 @@ router.post("/admin/reset-data", requireAuth, requireAdmin, async (req, res): Pr
     "whatsapp_logs", "notifications", "delivery_assignments",
   ];
   for (const t of tables) {
-    await db.execute(sql.raw(`TRUNCATE TABLE "${t}" RESTART IDENTITY CASCADE`));
+    await db.execute(sql.raw(`TRUNCATE TABLE \`${t}\``));
   }
   await db.execute(sql`UPDATE products SET stock = 0`);
   // Advance balances are column-backed (not live-derived), so they must be zeroed

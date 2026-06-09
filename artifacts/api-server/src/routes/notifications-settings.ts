@@ -9,7 +9,7 @@ const router = Router();
 
 async function xr(q: ReturnType<typeof sql>): Promise<any[]> {
   const r = (await db.execute(q)) as any;
-  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) ? r : []);
+  return Array.isArray(r?.rows) ? r.rows : (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (Array.isArray(r) ? r : []));
 }
 
 const PKR = (n: number) => `PKR ${Number(n).toLocaleString("en-PK")}`;
@@ -200,7 +200,7 @@ function extraTemplateFields(body: any): Record<string, unknown> {
 router.post("/whatsapp/templates", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateWhatsappTemplateBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [{ id: insId }] = await db.insert(whatsappTemplatesTable).values({ ...parsed.data, ...extraTemplateFields(req.body) }).returning({ id: whatsappTemplatesTable.id });
+  const [{ id: insId }] = await db.insert(whatsappTemplatesTable).values({ ...parsed.data, ...extraTemplateFields(req.body) }).$returningId();
   const [row] = await db.select().from(whatsappTemplatesTable).where(eq(whatsappTemplatesTable.id, insId));
   res.status(201).json({ ...row, createdAt: row.createdAt.toISOString() });
 });
@@ -291,7 +291,7 @@ router.put("/whatsapp/config", requireAuth, requireAdmin, async (req, res): Prom
   await db
     .insert(whatsappConfigTable)
     .values({ id: 1, customBodyTemplate: '{"to":"{{to}}","message":"{{message}}"}', ...upd })
-    .onConflictDoNothing();
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
   if (Object.keys(upd).length) {
     await db.update(whatsappConfigTable).set(upd).where(eq(whatsappConfigTable.id, 1));
   }
@@ -346,13 +346,13 @@ router.get("/whatsapp/logs", requireAuth, async (req, res): Promise<void> => {
     const like = `%${search}%`;
     conds.push(sql`AND (recipient_name LIKE ${like} OR phone LIKE ${like} OR message LIKE ${like} OR template_name LIKE ${like})`);
   }
-  if (startDate) conds.push(sql`AND created_at::date >= cast(${startDate} as date)`);
-  if (endDate) conds.push(sql`AND created_at::date <= cast(${endDate} as date)`);
+  if (startDate) conds.push(sql`AND cast(created_at as date) >= cast(${startDate} as date)`);
+  if (endDate) conds.push(sql`AND cast(created_at as date) <= cast(${endDate} as date)`);
   const where = sql.join(conds, sql` `);
 
   const rows = await xr(sql`
     SELECT id, entity_type as entityType, entity_id as entityId, recipient_name as recipientName,
-      phone, "trigger", template_name as templateName, message, status, error, provider,
+      phone, \`trigger\`, template_name as templateName, message, status, error, provider,
       created_by_id as createdById, created_at as createdAt
     FROM whatsapp_logs
     WHERE ${where}
@@ -391,26 +391,26 @@ router.post("/whatsapp/logs/:id/resend", requireAuth, async (req, res): Promise<
 async function computeEntityBalance(entityType: "customer" | "supplier", id: number): Promise<{ name: string; phone: string; balance: number; advance: number } | null> {
   if (entityType === "customer") {
     const [c] = await xr(sql`
-      SELECT name, phone, advance_balance::numeric as advance FROM customers WHERE id = ${id}
+      SELECT name, phone, advance_balance as advance FROM customers WHERE id = ${id}
     `);
     if (!c) return null;
     const [b] = await xr(sql`
       SELECT
-        coalesce((SELECT sum(CASE WHEN is_return = false THEN due_amount::numeric ELSE -total_amount::numeric END) FROM sales WHERE customer_id = ${id}), 0)
-        + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END) FROM customer_transactions WHERE customer_id = ${id} AND account = 'receivable'), 0)
+        coalesce((SELECT sum(CASE WHEN is_return = false THEN due_amount ELSE -total_amount END) FROM sales WHERE customer_id = ${id}), 0)
+        + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) FROM customer_transactions WHERE customer_id = ${id} AND account = 'receivable'), 0)
         as balance
     `);
     return { name: c.name, phone: c.phone ?? "", balance: Number(b?.balance ?? 0), advance: Number(c.advance ?? 0) };
   }
   const [s] = await xr(sql`
-    SELECT name, phone, advance_balance::numeric as advance FROM suppliers WHERE id = ${id}
+    SELECT name, phone, advance_balance as advance FROM suppliers WHERE id = ${id}
   `);
   if (!s) return null;
   const [b] = await xr(sql`
     SELECT
-      coalesce((SELECT sum(due_amount::numeric) FROM purchases WHERE supplier_id = ${id}), 0)
-      - coalesce((SELECT sum(total_amount::numeric) FROM purchase_returns WHERE supplier_id = ${id}), 0)
-      + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END) FROM supplier_transactions WHERE supplier_id = ${id} AND account = 'payable'), 0)
+      coalesce((SELECT sum(due_amount) FROM purchases WHERE supplier_id = ${id}), 0)
+      - coalesce((SELECT sum(total_amount) FROM purchase_returns WHERE supplier_id = ${id}), 0)
+      + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) FROM supplier_transactions WHERE supplier_id = ${id} AND account = 'payable'), 0)
       as balance
   `);
   return { name: s.name, phone: s.phone ?? "", balance: Number(b?.balance ?? 0), advance: Number(s.advance ?? 0) };
@@ -430,9 +430,9 @@ router.post("/whatsapp/bulk-reminders", requireAuth, async (req, res): Promise<v
     ? await xr(sql`
         SELECT id, name, phone, balance FROM (
           SELECT s.id, s.name, s.phone,
-            coalesce((SELECT sum(due_amount::numeric) FROM purchases WHERE supplier_id = s.id), 0)
-            - coalesce((SELECT sum(total_amount::numeric) FROM purchase_returns WHERE supplier_id = s.id), 0)
-            + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END) FROM supplier_transactions WHERE supplier_id = s.id AND account = 'payable'), 0)
+            coalesce((SELECT sum(due_amount) FROM purchases WHERE supplier_id = s.id), 0)
+            - coalesce((SELECT sum(total_amount) FROM purchase_returns WHERE supplier_id = s.id), 0)
+            + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) FROM supplier_transactions WHERE supplier_id = s.id AND account = 'payable'), 0)
             as balance
           FROM suppliers s
         ) t WHERE balance > 0
@@ -440,8 +440,8 @@ router.post("/whatsapp/bulk-reminders", requireAuth, async (req, res): Promise<v
     : await xr(sql`
         SELECT id, name, phone, balance FROM (
           SELECT c.id, c.name, c.phone,
-            coalesce((SELECT sum(CASE WHEN is_return = false THEN due_amount::numeric ELSE -total_amount::numeric END) FROM sales WHERE customer_id = c.id), 0)
-            + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount::numeric ELSE -amount::numeric END) FROM customer_transactions WHERE customer_id = c.id AND account = 'receivable'), 0)
+            coalesce((SELECT sum(CASE WHEN is_return = false THEN due_amount ELSE -total_amount END) FROM sales WHERE customer_id = c.id), 0)
+            + coalesce((SELECT sum(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) FROM customer_transactions WHERE customer_id = c.id AND account = 'receivable'), 0)
             as balance
           FROM customers c
         ) t WHERE balance > 0
@@ -517,7 +517,7 @@ function reportRange(req: any) {
 // Notification report: totals + breakdown by trigger and entity type.
 router.get("/reports/whatsapp-notifications", requireAuth, async (req, res): Promise<void> => {
   const { startDate, endDate } = reportRange(req);
-  const range = sql`created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`;
+  const range = sql`cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`;
 
   const [[totals], byTrigger, byEntity, rows] = await Promise.all([
     xr(sql`
@@ -527,11 +527,11 @@ router.get("/reports/whatsapp-notifications", requireAuth, async (req, res): Pro
       FROM whatsapp_logs WHERE ${range}
     `),
     xr(sql`
-      SELECT coalesce("trigger", 'manual') as triggerName, count(*) as total,
+      SELECT coalesce(\`trigger\`, 'manual') as triggerName, count(*) as total,
         sum(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
         sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
       FROM whatsapp_logs WHERE ${range}
-      GROUP BY coalesce("trigger", 'manual') ORDER BY total DESC
+      GROUP BY coalesce(\`trigger\`, 'manual') ORDER BY total DESC
     `),
     xr(sql`
       SELECT entity_type as entityType, count(*) as total
@@ -540,7 +540,7 @@ router.get("/reports/whatsapp-notifications", requireAuth, async (req, res): Pro
     `),
     xr(sql`
       SELECT id, entity_type as entityType, recipient_name as recipientName, phone,
-        "trigger", template_name as templateName, status, provider, created_at as createdAt
+        \`trigger\`, template_name as templateName, status, provider, created_at as createdAt
       FROM whatsapp_logs WHERE ${range}
       ORDER BY created_at DESC, id DESC LIMIT 500
     `),
@@ -562,15 +562,15 @@ router.get("/reports/whatsapp-notifications", requireAuth, async (req, res): Pro
 // Delivery report: sent vs failed over time + failure list.
 router.get("/reports/whatsapp-delivery", requireAuth, async (req, res): Promise<void> => {
   const { startDate, endDate } = reportRange(req);
-  const range = sql`created_at::date BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`;
+  const range = sql`cast(created_at as date) BETWEEN cast(${startDate} as date) AND cast(${endDate} as date)`;
 
   const [byDay, byProvider, failures] = await Promise.all([
     xr(sql`
-      SELECT created_at::date as date,
+      SELECT cast(created_at as date) as date,
         sum(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
         sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
       FROM whatsapp_logs WHERE ${range}
-      GROUP BY created_at::date ORDER BY date ASC
+      GROUP BY cast(created_at as date) ORDER BY date ASC
     `),
     xr(sql`
       SELECT provider, count(*) as total,
@@ -581,7 +581,7 @@ router.get("/reports/whatsapp-delivery", requireAuth, async (req, res): Promise<
     `),
     xr(sql`
       SELECT id, entity_type as entityType, recipient_name as recipientName, phone,
-        "trigger", template_name as templateName, error, provider, created_at as createdAt
+        \`trigger\`, template_name as templateName, error, provider, created_at as createdAt
       FROM whatsapp_logs WHERE ${range} AND status = 'failed'
       ORDER BY created_at DESC, id DESC LIMIT 500
     `),
@@ -600,7 +600,7 @@ router.get("/reports/whatsapp-delivery", requireAuth, async (req, res): Promise<
 router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
   let [settings] = await db.select().from(settingsTable);
   if (!settings) {
-    const [{ id: insId }] = await db.insert(settingsTable).values({}).returning({ id: whatsappConfigTable.id });
+    const [{ id: insId }] = await db.insert(settingsTable).values({}).$returningId();
     [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, insId));
   }
   res.json({ ...settings, taxRate: Number(settings.taxRate) });
@@ -617,7 +617,7 @@ router.patch("/settings", requireAuth, async (req, res): Promise<void> => {
     await db.update(settingsTable).set(upd).where(eq(settingsTable.id, settingsId));
     [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, settingsId));
   } else {
-    const [{ id: insId }] = await db.insert(settingsTable).values(upd).returning({ id: settingsTable.id });
+    const [{ id: insId }] = await db.insert(settingsTable).values(upd).$returningId();
     [settings] = await db.select().from(settingsTable).where(eq(settingsTable.id, insId));
   }
   res.json({ ...settings, taxRate: Number(settings.taxRate) });

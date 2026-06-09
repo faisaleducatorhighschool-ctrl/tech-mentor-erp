@@ -46,7 +46,7 @@ router.post("/publisher-series", requireAuth, async (req, res): Promise<void> =>
   const [{ id: newId }] = await db.insert(publisherSeriesTable).values({
     brandId: parsed.data.brandId,
     name: parsed.data.name,
-  }).returning({ id: publisherSeriesTable.id });
+  }).$returningId();
   const [row] = await db.select().from(publisherSeriesTable).where(eq(publisherSeriesTable.id, newId));
   res.status(201).json({ ...row, brandName: null, createdAt: row.createdAt.toISOString() });
 });
@@ -87,7 +87,7 @@ router.post("/book-classes", requireAuth, async (req, res): Promise<void> => {
   const [{ id: newId }] = await db.insert(bookClassesTable).values({
     name: parsed.data.name,
     sortOrder: parsed.data.sortOrder ?? 0,
-  }).returning({ id: bookClassesTable.id });
+  }).$returningId();
   const [row] = await db.select().from(bookClassesTable).where(eq(bookClassesTable.id, newId));
   res.status(201).json({ ...row, createdAt: row.createdAt.toISOString() });
 });
@@ -111,7 +111,7 @@ router.post("/book-subjects", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const existing = await db.select({ id: bookSubjectsTable.id }).from(bookSubjectsTable).where(eq(bookSubjectsTable.name, parsed.data.name));
   if (existing.length) { res.status(409).json({ error: "Subject already exists" }); return; }
-  const [{ id: newId }] = await db.insert(bookSubjectsTable).values({ name: parsed.data.name }).returning({ id: bookSubjectsTable.id });
+  const [{ id: newId }] = await db.insert(bookSubjectsTable).values({ name: parsed.data.name }).$returningId();
   const [row] = await db.select().from(bookSubjectsTable).where(eq(bookSubjectsTable.id, newId));
   res.status(201).json({ ...row, createdAt: row.createdAt.toISOString() });
 });
