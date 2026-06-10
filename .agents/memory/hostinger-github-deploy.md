@@ -42,3 +42,26 @@ There is no web frontend in the API server. On the live domain:
 - DB-backed routes (e.g. `/api/store/settings`) returning 500 while healthz is
   200 means the process is up but **MySQL is unreachable or unpopulated**
   (wrong db name/creds in `DATABASE_URL`, or the SQL dump/tables not imported).
+
+## Hostinger MySQL: use 127.0.0.1, never localhost; keep password alphanumeric
+Two distinct auth failures stacked here, both surfaced by Drizzle as a generic
+`Failed query: select ...` with the real cause truncated:
+1. **Wrong password** — `ER_ACCESS_DENIED_ERROR` (errno 1045) "using password: YES"
+   on *every* connection method. The `@` in the password (`F@isal6874`) survived
+   as a stray encoding char (parsed password length was 11, not 10), so the login
+   never matched. Fix: reset the DB user password to **letters+numbers only** to
+   sidestep all URL-encoding of `DATABASE_URL`.
+2. **IPv6 localhost** — once the password was right, `127.0.0.1` and the unix
+   socket `/tmp/mysql.sock` connected fine, but `localhost` still failed because
+   Node resolves `localhost` → IPv6 `::1`, and the Hostinger DB user is granted
+   for `127.0.0.1`/socket, **not** `::1`. Fix: set host to `127.0.0.1` in
+   `DATABASE_URL` (`mysql://user:pass@127.0.0.1:3306/db`).
+
+**Why:** Hostinger's real DB name *and* user are both the panel value prefixed
+with the account id (e.g. `u658282486_` → `u658282486_u658282_fbd`). Grants are
+tied to `127.0.0.1`, and `localhost`≠`127.0.0.1`≠`::1` in MySQL's host matching.
+
+**How to debug fast:** a temporary `/api/diag/db` route that uses `mysql2/promise`
+`createConnection` to probe `127.0.0.1`, `::1`, `localhost`, and common socket
+paths in one request returns the *exact* `code`/`errno`/`message` per target as
+JSON — ends the guessing from truncated log screenshots. Remove it after.
