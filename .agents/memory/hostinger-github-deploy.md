@@ -64,4 +64,19 @@ tied to `127.0.0.1`, and `localhost`≠`127.0.0.1`≠`::1` in MySQL's host match
 **How to debug fast:** a temporary `/api/diag/db` route that uses `mysql2/promise`
 `createConnection` to probe `127.0.0.1`, `::1`, `localhost`, and common socket
 paths in one request returns the *exact* `code`/`errno`/`message` per target as
-JSON — ends the guessing from truncated log screenshots. Remove it after.
+JSON — ends the guessing from truncated log screenshots. Remove it after. Make
+the diag also echo the *parsed* creds (user, host, db, passwordLength — never the
+password value): that is what exposed the all-caps bug below in one read.
+
+## All-caps DATABASE_URL silently breaks parsing
+A non-technical user typed the whole `DATABASE_URL` value in CAPITAL letters
+(`MYSQL://U658282486_FBDLIVE:...`). Symptoms via diag: parsed user came out as
+literal `MYSQL`, database uppercased, passwordLength wildly wrong (42), and every
+connection `ER_ACCESS_DENIED`. Causes: (1) the `mysql://` strip regex is
+case-sensitive so `MYSQL://` isn't removed and the first `:` (in `MYSQL:`) is
+taken as the user/password split; (2) MySQL usernames and Linux db names are
+case-sensitive so `U658282486_...` ≠ the real lowercase identifiers.
+**Fix:** have the user *paste* (not type) the exact-case value; the only caps
+should be inside the password. **Why it recurs:** mobile/keyboard auto-capitalize
+and Caps Lock. The parser's protocol strip could be made `/i`, but that still
+won't rescue uppercased credentials — correct-case entry is the real fix.
