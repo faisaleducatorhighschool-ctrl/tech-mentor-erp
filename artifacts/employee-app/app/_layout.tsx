@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 import {
   Inter_400Regular,
@@ -18,7 +19,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// On web the ERP is served from the same domain as the API, so use relative
+// `/api` requests (empty base = same-origin). On native (phone app) we must
+// point at the live backend domain.
+if (Platform.OS === "web") {
+  setBaseUrl("");
+} else {
+  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+}
 setAuthTokenGetter(() => AsyncStorage.getItem("erp_token"));
 
 SplashScreen.preventAutoHideAsync();

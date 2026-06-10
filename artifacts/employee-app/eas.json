@@ -21,7 +21,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "your-replit-dev-domain.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "plum-swallow-901405.hostingersite.com"
       }
     },
     "production": {
@@ -29,7 +29,7 @@
         "buildType": "aab"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "your-production-domain.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "plum-swallow-901405.hostingersite.com"
       }
     }
   },

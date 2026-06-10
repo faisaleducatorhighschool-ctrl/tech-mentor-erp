@@ -2,7 +2,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
-import { rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -113,6 +114,16 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Copy the staff ERP web export (committed in web-erp/) into dist so the
+  // server can serve it from the same domain at runtime.
+  const webErpSrc = path.resolve(artifactDir, "web-erp");
+  if (existsSync(webErpSrc)) {
+    await cp(webErpSrc, path.resolve(distDir, "web-erp"), { recursive: true });
+    console.log("Copied web-erp static export into dist/web-erp");
+  } else {
+    console.warn("web-erp/ not found — skipping web ERP copy (API only)");
+  }
 }
 
 buildAll().catch((err) => {
