@@ -90,6 +90,12 @@ allowBuilds:
   unrs-resolver: false
 
 overrides:
+  # Force a single React copy across the whole workspace. Expo SDK 54 / RN 0.81
+  # transitive deps (e.g. @expo/metro-runtime, @radix-ui/* via expo-router) pull
+  # react/react-dom 19.0.0, which duplicates React in the web bundle and causes
+  # "Invalid hook call (more than one copy of React)" → blank web screen.
+  react: 19.1.0
+  react-dom: 19.1.0
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
