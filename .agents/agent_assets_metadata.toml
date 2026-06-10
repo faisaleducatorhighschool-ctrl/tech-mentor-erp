@@ -29,3 +29,9 @@ id = "gTgt6DS5T2EZrJf8DfQzu"
 uri = "file://docs/hostinger-api-deployment.md"
 type = "text"
 title = "Hostinger API Deployment Guide (MySQL)"
+
+[[outputs]]
+id = "jDBDY6MGJUCypaJ4nA2cm"
+uri = "file://exports/faisal-book-depot-database.sql.gz"
+type = "unspecified"
+title = "Faisal Book Depot — Full MySQL Database (tables + data)"
