@@ -45,7 +45,9 @@ app.use("/api", (_req, res: express.Response) => {
 // resolve to index.html. Non-/api requests are handled here.
 if (hasWebErp) {
   app.use(express.static(webErpDir));
-  app.use((_req, res: express.Response) => {
+  // SPA fallback for client-side routes (GET/HEAD only); other methods fall
+  // through to Express's default 404.
+  app.get(/.*/, (_req, res: express.Response) => {
     res.sendFile(path.join(webErpDir, "index.html"));
   });
 } else {
